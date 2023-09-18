@@ -1,123 +1,152 @@
-use bevy::prelude::*;
+use std::collections::HashMap;
+
+use bevy::ecs::query::Has;
+
+#[derive(PartialEq, Eq, Hash)]
+enum Resource {
+    Gold,
+    Energy,
+    Worker,
+    Engineer,
+    Chip,
+    Wire,
+    Computer,
+    Log,
+    Plank,
+    Furniture,
+}
+
+struct Recipe {
+    materials: HashMap<Resource, i32>,
+}
+
+enum ValidRecipe {
+    ComputerAssembly,
+    PlankProduction,
+    FurnitureProduction,
+}
+
+impl ValidRecipe {
+    fn get_recipe(&self) -> Recipe {
+        match self {
+            Self::ComputerAssembly => Recipe {
+                materials: (vec![
+                    (Resource::Chip, 1),
+                    (Resource::Wire, 1),
+                    (Resource::Computer, -1),
+                ])
+                .into_iter()
+                .collect(),
+            },
+            Self::PlankProduction => Recipe {
+                materials: (vec![
+                    (Resource::Energy, 1),
+                    (Resource::Log, 1),
+                    (Resource::Plank, -1),
+                ])
+                .into_iter()
+                .collect(),
+            },
+            Self::FurnitureProduction => Recipe {
+                materials: (vec![(Resource::Plank, 1), (Resource::Furniture, -1)])
+                    .into_iter()
+                    .collect(),
+            },
+        }
+    }
+}
+
+enum BuildingType {
+    WoodWorkingFactory,
+    ComputerFactory,
+}
+
+impl BuildingType {
+    fn get_valid_recipes(&self) -> Vec<ValidRecipe> {
+        match self {
+            Self::ComputerFactory => vec![ValidRecipe::ComputerAssembly],
+            Self::WoodWorkingFactory => vec![
+                ValidRecipe::PlankProduction,
+                ValidRecipe::FurnitureProduction,
+            ],
+        }
+    }
+}
+
+struct OwnedBuilding {
+    building_type: BuildingType,
+    production_scale: HashMap<Recipe, u32>,
+    owner_id: Option<usize>,
+}
+
+struct City {
+    owned_buildings: Vec<OwnedBuilding>,
+}
+
+struct OwnedConnection {
+    owner_id: Option<usize>,
+    city_ids: Vec<usize>,
+}
+
+#[derive(Default)]
+struct Graph {
+    cities: Vec<City>,
+    connections: Vec<OwnedConnection>,
+}
+
+#[derive(Default)]
+struct Business {
+    capital: i32,
+    active_recipes: Vec<ValidRecipe>,
+}
+
+impl Graph {
+    fn get_net_products(&self, business_id: usize, resource: Resource) -> i32 {
+        self.cities
+            .iter()
+            .flat_map(|city| city.owned_buildings.iter())
+            .filter(|owned_building| owned_building.owner_id == Some(business_id))
+            .flat_map(|owned_building| {
+                owned_building
+                    .production_scale
+                    .iter()
+                    .map(|(recipe, scale)| {
+                        *recipe.materials.get(&resource).unwrap_or(&0i32) * (*scale as i32)
+                    })
+            })
+            .sum()
+    }
+
+    fn can_buy_building(&self, business_id: usize, city_id: usize, building_id: usize) -> bool {
+        let building = self
+            .cities
+            .get(city_id)
+            .unwrap()
+            .owned_buildings
+            .get(building_id)
+            .unwrap();
+
+        building.owner_id == None
+            && self.connections.iter().any(|owned_connection| {
+                owned_connection.owner_id == Some(business_id)
+                    && owned_connection.city_ids.contains(&city_id)
+            })
+    }
+
+    fn can_buy_connection(&self, business_id: usize, connection_id: usize) -> bool {
+        let connection = self.connections.get(connection_id).unwrap();
+
+        connection.owner_id == None
+            && self.connections.iter().any(|owned_connection| {
+                owned_connection.owner_id == Some(business_id)
+                    && owned_connection
+                        .city_ids
+                        .iter()
+                        .any(|city_id| connection.city_ids.contains(city_id))
+            })
+    }
+}
 
 fn main() {
-    App::new()
-        .add_plugins(DefaultPlugins)
-        .add_systems(Startup, startup)
-        .run();
-}
-fn startup(mut child_builder: Commands, asset_server: Res<AssetServer>) {
-    child_builder.spawn(Camera2dBundle::default());
-
-    child_builder
-        .spawn(NodeBundle {
-            style: Style {
-                top: Val::Px(100.0),
-                left: Val::Px(200.0),
-                position_type: PositionType::Absolute,
-                flex_direction: FlexDirection::Row,
-                justify_content: JustifyContent::Center,
-                align_items: AlignItems::Center,
-                ..default()
-            },
-            background_color: Color::rgb(0.4, 0.4, 1.).into(),
-            ..default()
-        })
-        .with_children(|child_builder| {
-            child_builder
-                .spawn(NodeBundle {
-                    style: Style {
-                        flex_direction: FlexDirection::Column,
-                        justify_content: JustifyContent::Center,
-                        align_items: AlignItems::Center,
-                        ..default()
-                    },
-                    ..default()
-                })
-                .with_children(|child_builder| {
-                    child_builder.spawn(ButtonBundle {
-                        style: Style {
-                            width: Val::Px(50.0),
-                            height: Val::Px(20.0),
-                            justify_content: JustifyContent::Center,
-                            align_items: AlignItems::Center,
-                            ..default()
-                        },
-                        background_color: Color::rgb(0.15, 0.15, 0.15).into(),
-                        ..default()
-                    });
-                    child_builder.spawn((TextBundle::from_section(
-                        "5",
-                        TextStyle {
-                            font: asset_server.load("fonts/FiraSans-Bold.ttf"),
-                            font_size: 50.0,
-                            color: Color::WHITE,
-                        },
-                    ),));
-                    child_builder.spawn(ButtonBundle {
-                        style: Style {
-                            width: Val::Px(50.0),
-                            height: Val::Px(20.0),
-                            justify_content: JustifyContent::Center,
-                            align_items: AlignItems::Center,
-                            ..default()
-                        },
-                        background_color: Color::rgb(0.15, 0.15, 0.15).into(),
-                        ..default()
-                    });
-                });
-
-            child_builder
-                .spawn(NodeBundle {
-                    style: Style {
-                        flex_direction: FlexDirection::Column,
-                        justify_content: JustifyContent::Center,
-                        align_items: AlignItems::Center,
-                        ..default()
-                    },
-                    ..default()
-                })
-                .with_children(|child_builder| {
-                    child_builder.spawn((TextBundle::from_section(
-                        "Computer Assembly",
-                        TextStyle {
-                            font: asset_server.load("fonts/FiraSans-Bold.ttf"),
-                            font_size: 25.,
-                            color: Color::WHITE,
-                        },
-                    ),));
-                    child_builder
-                        .spawn(NodeBundle {
-                            style: Style {
-                                flex_direction: FlexDirection::Row,
-                                justify_content: JustifyContent::Center,
-                                align_items: AlignItems::Center,
-                                ..default()
-                            },
-                            ..default()
-                        })
-                        .with_children(|child_builder| {
-                            for texture_name in
-                                vec!["chip", "add", "wire", "right_arrow", "computer"]
-                            {
-                                child_builder.spawn((
-                                    NodeBundle {
-                                        style: Style {
-                                            width: Val::Px(70.0),
-                                            height: Val::Px(70.0),
-                                            margin: UiRect::top(Val::VMin(5.)),
-                                            ..default()
-                                        },
-                                        // a `NodeBundle` is transparent by default, so to see the image we have to its color to `WHITE`
-                                        background_color: Color::WHITE.into(),
-                                        ..default()
-                                    },
-                                    UiImage::new(
-                                        asset_server.load(format!("textures/{}.png", texture_name)),
-                                    ),
-                                ));
-                            }
-                        });
-                });
-        });
+    let business = Business::default();
 }
