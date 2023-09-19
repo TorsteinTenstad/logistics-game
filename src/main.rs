@@ -1,7 +1,9 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, transform::commands};
 
 mod backend;
 use backend::{BuildingType, City, Graph, OwnedBuilding, OwnedConnection};
+mod mouse_detector;
+use mouse_detector::{update_mouse_detector, MouseDetector, MouseDetectorState};
 mod spawn;
 
 fn main() {
@@ -9,6 +11,7 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_systems(Startup, startup)
         .add_systems(Update, update)
+        .add_systems(Update, update_mouse_detector)
         .run();
 }
 fn startup(
@@ -49,7 +52,6 @@ fn startup(
         ],
     };
 
-    spawn::spawn_building_ui(&mut commands, &asset_server);
     spawn::spawn_graph(
         &graph,
         &mut commands,
@@ -59,4 +61,16 @@ fn startup(
     )
 }
 
-fn update() {}
+fn update(
+    mut commands: Commands,
+    query: Query<&MouseDetector, Changed<MouseDetector>>,
+    asset_server: Res<AssetServer>,
+) {
+    for mouse_detector in &query {
+        match mouse_detector.detector_state {
+            MouseDetectorState::Press => spawn::spawn_building_ui(&mut commands, &asset_server),
+            MouseDetectorState::Hover => (),
+            MouseDetectorState::None => (),
+        }
+    }
+}
