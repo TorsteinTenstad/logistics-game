@@ -1,12 +1,52 @@
-use bevy::prelude::*;
+use super::backend;
+use bevy::{prelude::*, sprite::MaterialMesh2dBundle};
+use std::*;
 
-fn main() {
-    App::new()
-        .add_plugins(DefaultPlugins)
-        .add_systems(Startup, startup)
-        .run();
+enum ZOrder {
+    Connection,
+    City,
+    Building,
 }
-fn startup(mut child_builder: Commands, asset_server: Res<AssetServer>) {
+impl From<ZOrder> for f32 {
+    fn from(value: ZOrder) -> Self {
+        value as i32 as f32
+    }
+}
+
+pub fn spawn_graph(
+    graph: &backend::Graph,
+    commands: &mut Commands,
+    meshes: &mut ResMut<Assets<Mesh>>,
+    materials: &mut ResMut<Assets<ColorMaterial>>,
+    asset_server: &Res<AssetServer>,
+) {
+    for city in graph.cities.iter() {
+        let city_radius = 50.0;
+        commands.spawn(MaterialMesh2dBundle {
+            mesh: meshes
+                .add(shape::RegularPolygon::new(city_radius, 6).into())
+                .into(),
+            material: materials.add(ColorMaterial::from(Color::TURQUOISE)),
+            transform: Transform::from_translation(Vec3::new(city.x, city.y, ZOrder::City.into())),
+            ..default()
+        });
+        for (i, owned_building) in city.owned_buildings.iter().enumerate() {
+            let rad = 2.0 * f32::consts::PI * (i as f32 / 6.0);
+            commands.spawn(MaterialMesh2dBundle {
+                mesh: meshes.add(shape::Circle::new(10.0).into()).into(),
+                material: materials.add(ColorMaterial::from(Color::BLUE)),
+                transform: Transform::from_translation(Vec3::new(
+                    0.5 * city_radius * f32::sin(rad) + city.x,
+                    0.5 * city_radius * f32::cos(rad) + city.y,
+                    ZOrder::Building.into(),
+                )),
+                ..default()
+            });
+        }
+    }
+}
+
+pub fn spawn_building_ui(child_builder: &mut Commands, asset_server: &Res<AssetServer>) {
     child_builder.spawn(Camera2dBundle::default());
 
     child_builder
@@ -97,9 +137,7 @@ fn startup(mut child_builder: Commands, asset_server: Res<AssetServer>) {
                             ..default()
                         })
                         .with_children(|child_builder| {
-                            for texture_name in
-                                vec!["chip", "add", "wire", "right_arrow", "computer"]
-                            {
+                            for texture_name in vec!["chip", "wire", "right_arrow", "computer"] {
                                 child_builder.spawn((
                                     NodeBundle {
                                         style: Style {
