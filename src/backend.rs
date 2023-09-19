@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 
+use bevy::prelude::Resource;
+
 #[derive(PartialEq, Eq, Hash)]
-enum Resource {
+enum Material {
     Gold,
     Energy,
     Worker,
@@ -14,8 +16,8 @@ enum Resource {
     Furniture,
 }
 
-struct Recipe {
-    materials: HashMap<Resource, i32>,
+pub struct Recipe {
+    pub materials: HashMap<Material, i32>,
 }
 
 #[derive(PartialEq, Eq, Hash)]
@@ -26,28 +28,28 @@ pub enum ValidRecipe {
 }
 
 impl ValidRecipe {
-    fn get_recipe(&self) -> Recipe {
+    pub fn get_recipe(&self) -> Recipe {
         match self {
             Self::ComputerAssembly => Recipe {
                 materials: (vec![
-                    (Resource::Chip, 1),
-                    (Resource::Wire, 1),
-                    (Resource::Computer, -1),
+                    (Material::Chip, 1),
+                    (Material::Wire, 1),
+                    (Material::Computer, -1),
                 ])
                 .into_iter()
                 .collect(),
             },
             Self::PlankProduction => Recipe {
                 materials: (vec![
-                    (Resource::Energy, 1),
-                    (Resource::Log, 1),
-                    (Resource::Plank, -1),
+                    (Material::Energy, 1),
+                    (Material::Log, 1),
+                    (Material::Plank, -1),
                 ])
                 .into_iter()
                 .collect(),
             },
             Self::FurnitureProduction => Recipe {
-                materials: (vec![(Resource::Plank, 1), (Resource::Furniture, -1)])
+                materials: (vec![(Material::Plank, 1), (Material::Furniture, -1)])
                     .into_iter()
                     .collect(),
             },
@@ -104,7 +106,7 @@ pub struct OwnedConnection {
     pub owner_id: Option<usize>,
 }
 
-#[derive(Default)]
+#[derive(Default, Resource)]
 pub struct Graph {
     pub cities: Vec<City>,
     pub connections: Vec<OwnedConnection>,
@@ -117,7 +119,7 @@ struct Business {
 }
 
 impl Graph {
-    fn get_net_products(&self, business_id: usize, resource: Resource) -> i32 {
+    fn get_net_products(&self, business_id: usize, resource: Material) -> i32 {
         self.cities
             .iter()
             .flat_map(|city| city.owned_buildings.iter())

@@ -1,4 +1,5 @@
 use bevy::{prelude::*, window::PrimaryWindow};
+
 #[derive(PartialEq, Debug)]
 pub enum MouseDetectorState {
     None,
@@ -25,15 +26,15 @@ impl MouseDetector {
 
 pub fn update_mouse_detector(
     mouse_buttons: Res<Input<MouseButton>>,
-    q_windows: Query<&Window, With<PrimaryWindow>>,
-    camera_q: Query<(&Camera, &GlobalTransform)>,
+    query_window: Query<&Window, With<PrimaryWindow>>,
+    query_camera: Query<(&Camera, &GlobalTransform)>,
     mut query: Query<(&mut MouseDetector, &GlobalTransform)>,
 ) {
-    let (camera, camera_global_transform) = camera_q.single();
+    let (camera, camera_global_transform) = query_camera.single();
 
     let left_button_down = mouse_buttons.pressed(MouseButton::Left);
 
-    if let Some(mouse_pos) = q_windows.single().cursor_position().and_then(|cursor| {
+    if let Some(mouse_pos) = query_window.single().cursor_position().and_then(|cursor| {
         camera
             .viewport_to_world(camera_global_transform, cursor)
             .map(|ray| ray.origin)

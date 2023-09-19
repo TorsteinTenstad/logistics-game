@@ -1,108 +1,80 @@
-use super::backend;
-use super::id_components;
-use super::mouse_detector;
-use bevy::{prelude::*, sprite::MaterialMesh2dBundle};
-use std::collections::HashMap;
-use std::*;
-
-fn atan2(vec2: Vec2) -> f32 {
-    f32::atan2(vec2.x, vec2.y)
-}
-
-enum ZOrder {
-    Connection,
-    City,
-    Building,
-}
-impl From<ZOrder> for f32 {
-    fn from(value: ZOrder) -> Self {
-        value as i32 as f32
-    }
-}
-
-pub fn spawn_graph(
-    graph: &backend::Graph,
-    commands: &mut Commands,
-    meshes: &mut ResMut<Assets<Mesh>>,
-    materials: &mut ResMut<Assets<ColorMaterial>>,
-    asset_server: &Res<AssetServer>,
-) {
-    let mut city_positions = HashMap::<usize, Vec2>::new();
-    for (city_id, city) in graph.cities.iter().enumerate() {
-        let city_radius = 50.0;
-        let building_radius = 15.0;
-        let position = Vec2::new(city.x, city.y);
-        city_positions.insert(city_id, position);
-        commands.spawn((MaterialMesh2dBundle {
-            mesh: meshes
-                .add(shape::RegularPolygon::new(city_radius, 6).into())
-                .into(),
-            material: materials.add(ColorMaterial::from(Color::TURQUOISE)),
-            transform: Transform::from_translation(Vec3::new(city.x, city.y, ZOrder::City.into())),
-            ..default()
-        },));
-        for (building_id, owned_building) in city.owned_buildings.iter().enumerate() {
-            let rad = 2.0 * f32::consts::PI * (building_id as f32 / 6.0);
-            commands.spawn((
-                MaterialMesh2dBundle {
-                    mesh: meshes
-                        .add(shape::Circle::new(building_radius).into())
-                        .into(),
-                    material: materials.add(ColorMaterial::from(Color::BLUE)),
-                    transform: Transform::from_translation(Vec3::new(
-                        0.5 * city_radius * f32::sin(rad) + city.x,
-                        0.5 * city_radius * f32::cos(rad) + city.y,
-                        ZOrder::Building.into(),
-                    )),
-                    ..default()
-                },
-                mouse_detector::MouseDetector::new(building_radius, building_radius),
-                id_components::BuildingComponent { id: building_id },
-            ));
-        }
-    }
-    for (connection_id, owned_connection) in graph.connections.iter().enumerate() {
-        let connection_width = 10.0;
-        assert!(owned_connection.city_ids.len() == 2);
-        let start = city_positions
-            .get(owned_connection.city_ids.get(0).unwrap())
-            .unwrap()
-            .clone();
-        let end = city_positions
-            .get(owned_connection.city_ids.get(1).unwrap())
-            .unwrap()
-            .clone();
-        let midpoint = (start + end) / 2f32;
-        let connection_length = Vec2::distance(start, end);
-        commands.spawn((
-            SpriteBundle {
-                sprite: Sprite {
-                    color: Color::GRAY,
-                    custom_size: Some(Vec2::new(connection_width, connection_length)),
-                    ..default()
-                },
-                transform: Transform::from_translation(Vec3::new(
-                    midpoint.x,
-                    midpoint.y,
-                    ZOrder::Connection.into(),
-                ))
-                .with_rotation(Quat::from_axis_angle(Vec3::Z, -atan2(end - start))),
-                ..default()
-            },
-            mouse_detector::MouseDetector::new(connection_width, connection_length),
-            id_components::ConnectionComponent { id: connection_id },
-        ));
-    }
-}
+use super::backend::Graph;
+use super::id_components::{BuildingComponent, ConnectionComponent};
+use super::mouse_detector::{MouseDetector, MouseDetectorState};
+use bevy::prelude::*;
 
 #[derive(Component)]
-struct UiPopup {}
+pub struct UiPopup {}
 
-pub fn spawn_building_ui(
-    child_builder: &mut Commands,
+pub fn update_ui_popups(
+    mut commands: Commands,
+    mouse_buttons: Res<Input<MouseButton>>,
+    camera_q: Query<(&Camera, &GlobalTransform)>,
+    asset_server: Res<AssetServer>,
+    graph: Res<Graph>,
+    query_buildings: Query<
+        (&MouseDetector, &BuildingComponent, &GlobalTransform),
+        Changed<MouseDetector>,
+    >,
+    query_connections: Query<
+        (&MouseDetector, &ConnectionComponent, &GlobalTransform),
+        Changed<MouseDetector>,
+    >,
+    query_ui_popups: Query<Entity, With<UiPopup>>,
+) {
+    for (mouse_detector, building_component, global_transform) in &query_buildings {
+        match mouse_detector.detector_state {
+            MouseDetectorState::None => (),
+            MouseDetectorState::Hover => (),
+            MouseDetectorState::Press => {
+                let (camera, camera_global_transform) = camera_q.single();
+                let spawn_viewport_pos = camera
+                    .world_to_viewport(
+                        camera_global_transform,
+                        global_transform.compute_transform().translation,
+                    )
+                    .unwrap();
+                despawn_building_ui(&mut commands, &query_ui_popups);
+                spawn_building_ui(
+                    &mut commands,
+                    &asset_server,
+                    &graph,
+                    building_component,
+                    spawn_viewport_pos,
+                );
+            }
+        }
+    }
+    if mouse_buttons.just_pressed(MouseButton::Left) && !query_buildings.iter().any(|_| true) {
+        despawn_building_ui(&mut commands, &query_ui_popups);
+    }
+}
+
+fn despawn_building_ui(commands: &mut Commands, query: &Query<Entity, With<UiPopup>>) {
+    for entity in query.iter() {
+        commands.entity(entity).despawn();
+    }
+}
+
+fn spawn_building_ui(
+    commands: &mut Commands,
     asset_server: &Res<AssetServer>,
+    graph: &Graph,
+    building_component: &BuildingComponent,
     position: Vec2,
 ) {
+    graph
+        .cities
+        .get(building_component.city_id)
+        .unwrap()
+        .owned_buildings
+        .get(building_component.building_id)
+        .unwrap()
+        .production_scale
+        .iter()
+        .map(|(valid_recipe, production_scale)| ());
+
+    let child_builder = commands;
     child_builder
         .spawn((
             NodeBundle {

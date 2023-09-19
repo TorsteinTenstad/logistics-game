@@ -2,7 +2,8 @@ use bevy::prelude::*;
 
 #[derive(Component)]
 pub struct BuildingComponent {
-    pub id: usize,
+    pub city_id: usize,
+    pub building_id: usize,
 }
 
 #[derive(Component)]
