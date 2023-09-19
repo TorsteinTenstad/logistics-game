@@ -1,6 +1,11 @@
 use super::backend;
 use bevy::{prelude::*, sprite::MaterialMesh2dBundle};
+use std::collections::HashMap;
 use std::*;
+
+fn atan2(vec2: Vec2) -> f32 {
+    f32::atan2(vec2.x, vec2.y)
+}
 
 enum ZOrder {
     Connection,
@@ -20,19 +25,22 @@ pub fn spawn_graph(
     materials: &mut ResMut<Assets<ColorMaterial>>,
     asset_server: &Res<AssetServer>,
 ) {
-    for city in graph.cities.iter() {
+    let mut city_positions = HashMap::<usize, Vec2>::new();
+    for (city_id, city) in graph.cities.iter().enumerate() {
         let city_radius = 50.0;
-        commands.spawn(MaterialMesh2dBundle {
+        let position = Vec2::new(city.x, city.y);
+        city_positions.insert(city_id, position);
+        commands.spawn((MaterialMesh2dBundle {
             mesh: meshes
                 .add(shape::RegularPolygon::new(city_radius, 6).into())
                 .into(),
             material: materials.add(ColorMaterial::from(Color::TURQUOISE)),
             transform: Transform::from_translation(Vec3::new(city.x, city.y, ZOrder::City.into())),
             ..default()
-        });
-        for (i, owned_building) in city.owned_buildings.iter().enumerate() {
-            let rad = 2.0 * f32::consts::PI * (i as f32 / 6.0);
-            commands.spawn(MaterialMesh2dBundle {
+        },));
+        for (building_id, owned_building) in city.owned_buildings.iter().enumerate() {
+            let rad = 2.0 * f32::consts::PI * (building_id as f32 / 6.0);
+            commands.spawn((MaterialMesh2dBundle {
                 mesh: meshes.add(shape::Circle::new(10.0).into()).into(),
                 material: materials.add(ColorMaterial::from(Color::BLUE)),
                 transform: Transform::from_translation(Vec3::new(
@@ -41,14 +49,39 @@ pub fn spawn_graph(
                     ZOrder::Building.into(),
                 )),
                 ..default()
-            });
+            },));
         }
+    }
+    for (connection_id, owned_connection) in graph.connections.iter().enumerate() {
+        let connection_width = 10.0;
+        assert!(owned_connection.city_ids.len() == 2);
+        let start = city_positions
+            .get(owned_connection.city_ids.get(0).unwrap())
+            .unwrap()
+            .clone();
+        let end = city_positions
+            .get(owned_connection.city_ids.get(1).unwrap())
+            .unwrap()
+            .clone();
+        let midpoint = (start + end) / 2f32;
+        commands.spawn(SpriteBundle {
+            sprite: Sprite {
+                color: Color::GRAY,
+                custom_size: Some(Vec2::new(connection_width, Vec2::distance(start, end))),
+                ..default()
+            },
+            transform: Transform::from_translation(Vec3::new(
+                midpoint.x,
+                midpoint.y,
+                ZOrder::Connection.into(),
+            ))
+            .with_rotation(Quat::from_axis_angle(Vec3::Z, -atan2(end - start))),
+            ..default()
+        });
     }
 }
 
 pub fn spawn_building_ui(child_builder: &mut Commands, asset_server: &Res<AssetServer>) {
-    child_builder.spawn(Camera2dBundle::default());
-
     child_builder
         .spawn(NodeBundle {
             style: Style {

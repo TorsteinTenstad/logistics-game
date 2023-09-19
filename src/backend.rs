@@ -55,6 +55,7 @@ impl ValidRecipe {
     }
 }
 
+#[derive(Clone, Copy)]
 pub enum BuildingType {
     WoodWorkingFactory,
     ComputerFactory,
@@ -78,6 +79,20 @@ pub struct OwnedBuilding {
     pub owner_id: Option<usize>,
 }
 
+impl OwnedBuilding {
+    pub fn new(building_type: BuildingType) -> OwnedBuilding {
+        Self {
+            building_type: building_type,
+            production_scale: building_type
+                .get_valid_recipes()
+                .into_iter()
+                .map(|valid_recipe| (valid_recipe, 0))
+                .collect(),
+            owner_id: None,
+        }
+    }
+}
+
 pub struct City {
     pub x: f32,
     pub y: f32,
@@ -85,8 +100,8 @@ pub struct City {
 }
 
 pub struct OwnedConnection {
-    owner_id: Option<usize>,
-    city_ids: Vec<usize>,
+    pub city_ids: Vec<usize>,
+    pub owner_id: Option<usize>,
 }
 
 #[derive(Default)]
