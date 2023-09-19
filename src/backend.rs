@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use bevy::prelude::Resource;
 
 #[derive(PartialEq, Eq, Hash)]
-enum Material {
+pub enum Material {
     Gold,
     Energy,
     Worker,
