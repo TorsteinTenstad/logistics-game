@@ -1,8 +1,9 @@
-use bevy::{prelude::*, transform::commands};
-
+use bevy::prelude::*;
 mod backend;
+mod id_components;
 use backend::{BuildingType, City, Graph, OwnedBuilding, OwnedConnection};
 mod mouse_detector;
+use id_components::{BuildingComponent, ConnectionComponent};
 use mouse_detector::{update_mouse_detector, MouseDetector, MouseDetectorState};
 mod spawn;
 
@@ -20,7 +21,7 @@ fn startup(
     mut materials: ResMut<Assets<ColorMaterial>>,
     asset_server: Res<AssetServer>,
 ) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2dBundle { ..default() });
 
     let graph = Graph {
         cities: vec![
@@ -63,12 +64,29 @@ fn startup(
 
 fn update(
     mut commands: Commands,
-    query: Query<&MouseDetector, Changed<MouseDetector>>,
+    camera_q: Query<(&Camera, &GlobalTransform)>,
     asset_server: Res<AssetServer>,
+    query_buildings: Query<
+        (&MouseDetector, &BuildingComponent, &GlobalTransform),
+        Changed<MouseDetector>,
+    >,
+    query_connections: Query<
+        (&MouseDetector, &ConnectionComponent, &GlobalTransform),
+        Changed<MouseDetector>,
+    >,
 ) {
-    for mouse_detector in &query {
+    for (mouse_detector, building_component, global_transform) in &query_buildings {
         match mouse_detector.detector_state {
-            MouseDetectorState::Press => spawn::spawn_building_ui(&mut commands, &asset_server),
+            MouseDetectorState::Press => {
+                let (camera, camera_global_transform) = camera_q.single();
+                let spawn_viewport_pos = camera
+                    .world_to_viewport(
+                        camera_global_transform,
+                        global_transform.compute_transform().translation,
+                    )
+                    .unwrap();
+                spawn::spawn_building_ui(&mut commands, &asset_server, spawn_viewport_pos);
+            }
             MouseDetectorState::Hover => (),
             MouseDetectorState::None => (),
         }

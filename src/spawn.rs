@@ -1,4 +1,5 @@
 use super::backend;
+use super::id_components;
 use super::mouse_detector;
 use bevy::{prelude::*, sprite::MaterialMesh2dBundle};
 use std::collections::HashMap;
@@ -32,21 +33,14 @@ pub fn spawn_graph(
         let building_radius = 15.0;
         let position = Vec2::new(city.x, city.y);
         city_positions.insert(city_id, position);
-        commands.spawn((
-            MaterialMesh2dBundle {
-                mesh: meshes
-                    .add(shape::RegularPolygon::new(city_radius, 6).into())
-                    .into(),
-                material: materials.add(ColorMaterial::from(Color::TURQUOISE)),
-                transform: Transform::from_translation(Vec3::new(
-                    city.x,
-                    city.y,
-                    ZOrder::City.into(),
-                )),
-                ..default()
-            },
-            mouse_detector::MouseDetector::new(city_radius, city_radius),
-        ));
+        commands.spawn((MaterialMesh2dBundle {
+            mesh: meshes
+                .add(shape::RegularPolygon::new(city_radius, 6).into())
+                .into(),
+            material: materials.add(ColorMaterial::from(Color::TURQUOISE)),
+            transform: Transform::from_translation(Vec3::new(city.x, city.y, ZOrder::City.into())),
+            ..default()
+        },));
         for (building_id, owned_building) in city.owned_buildings.iter().enumerate() {
             let rad = 2.0 * f32::consts::PI * (building_id as f32 / 6.0);
             commands.spawn((
@@ -63,6 +57,7 @@ pub fn spawn_graph(
                     ..default()
                 },
                 mouse_detector::MouseDetector::new(building_radius, building_radius),
+                id_components::BuildingComponent { id: building_id },
             ));
         }
     }
@@ -95,25 +90,36 @@ pub fn spawn_graph(
                 ..default()
             },
             mouse_detector::MouseDetector::new(connection_width, connection_length),
+            id_components::ConnectionComponent { id: connection_id },
         ));
     }
 }
 
-pub fn spawn_building_ui(child_builder: &mut Commands, asset_server: &Res<AssetServer>) {
+#[derive(Component)]
+struct UiPopup {}
+
+pub fn spawn_building_ui(
+    child_builder: &mut Commands,
+    asset_server: &Res<AssetServer>,
+    position: Vec2,
+) {
     child_builder
-        .spawn(NodeBundle {
-            style: Style {
-                top: Val::Px(100.0),
-                left: Val::Px(200.0),
-                position_type: PositionType::Absolute,
-                flex_direction: FlexDirection::Row,
-                justify_content: JustifyContent::Center,
-                align_items: AlignItems::Center,
+        .spawn((
+            NodeBundle {
+                style: Style {
+                    top: Val::Px(position.y),
+                    left: Val::Px(position.x),
+                    position_type: PositionType::Absolute,
+                    flex_direction: FlexDirection::Row,
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    ..default()
+                },
+                background_color: Color::rgb(0.4, 0.4, 1.).into(),
                 ..default()
             },
-            background_color: Color::rgb(0.4, 0.4, 1.).into(),
-            ..default()
-        })
+            UiPopup {},
+        ))
         .with_children(|child_builder| {
             child_builder
                 .spawn(NodeBundle {
