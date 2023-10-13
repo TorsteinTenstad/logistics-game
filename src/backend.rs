@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 
-use bevy::prelude::Resource;
-
 #[derive(PartialEq, Eq, Hash)]
 pub enum Material {
     Gold,
@@ -106,7 +104,7 @@ pub struct OwnedConnection {
     pub owner_id: Option<usize>,
 }
 
-#[derive(Default, Resource)]
+#[derive(Default)]
 pub struct Graph {
     pub cities: Vec<City>,
     pub connections: Vec<OwnedConnection>,
