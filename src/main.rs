@@ -15,7 +15,7 @@ async fn main() {
             },
             City {
                 x: 300.0,
-                y: 60.0,
+                y: 100.0,
                 owned_buildings: vec![OwnedBuilding::new(BuildingType::ComputerFactory)],
             },
             City {
@@ -28,7 +28,7 @@ async fn main() {
             },
             City {
                 x: 400.0,
-                y: 180.0,
+                y: 280.0,
                 owned_buildings: vec![
                     OwnedBuilding::new(BuildingType::WoodWorkingFactory),
                     OwnedBuilding::new(BuildingType::WoodWorkingFactory),
@@ -83,16 +83,28 @@ async fn main() {
                 .unwrap()
                 .clone();
             let v = Vec2::new(end_x - start_x, end_y - start_y);
+            let angle = v.angle_between(Vec2::new(0.0, 1.0));
             draw_rectangle_ex(
                 start_x,
                 start_y,
                 connection_width,
                 v.length(),
                 DrawRectangleParams {
-                    rotation: -v.angle_between(Vec2::new(0.0, 1.0)),
+                    rotation: -angle,
+                    offset: Vec2::new(0.5, 0.0),
                     ..Default::default()
                 },
             );
+
+            let local_mouse_pos =
+                Vec2::from_angle(angle).rotate(mouse_pos - Vec2::new(start_x, start_y));
+            if mouse_button_down
+                && local_mouse_pos.x.abs() < connection_width / 2.0
+                && local_mouse_pos.y > 0.0
+                && local_mouse_pos.y < v.length()
+            {
+                println!("Clicked connection {}", connection_id);
+            }
         }
 
         for (city_id, city) in graph.cities.iter().enumerate() {
