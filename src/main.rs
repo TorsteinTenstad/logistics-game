@@ -1,5 +1,5 @@
 use macroquad::prelude::*;
-use std::collections::HashMap;
+use std::{collections::HashMap, default};
 
 mod backend;
 use backend::{BuildingType, City, Graph, OwnedBuilding, OwnedConnection};
@@ -67,12 +67,37 @@ async fn main() {
         let mouse_button_down = is_mouse_button_pressed(MouseButton::Left);
         let (mouse_x, mouse_y) = mouse_position();
         let mouse_pos = Vec2::new(mouse_x, mouse_y);
-        let mut city_positions = HashMap::<usize, Vec2>::new();
+        let mut city_positions = HashMap::<usize, (f32, f32)>::new();
+        for (city_id, city) in graph.cities.iter().enumerate() {
+            city_positions.insert(city_id, (city.x, city.y));
+        }
+        for (connection_id, owned_connection) in graph.connections.iter().enumerate() {
+            let connection_width = 10.0;
+            assert!(owned_connection.city_ids.len() == 2);
+            let (start_x, start_y) = city_positions
+                .get(owned_connection.city_ids.get(0).unwrap())
+                .unwrap()
+                .clone();
+            let (end_x, end_y) = city_positions
+                .get(owned_connection.city_ids.get(1).unwrap())
+                .unwrap()
+                .clone();
+            let v = Vec2::new(end_x - start_x, end_y - start_y);
+            draw_rectangle_ex(
+                start_x,
+                start_y,
+                connection_width,
+                v.length(),
+                DrawRectangleParams {
+                    rotation: -v.angle_between(Vec2::new(0.0, 1.0)),
+                    ..Default::default()
+                },
+            );
+        }
+
         for (city_id, city) in graph.cities.iter().enumerate() {
             let city_radius = 50.0;
             let building_radius = 10.0;
-            let position = Vec2::new(city.x, city.y);
-            city_positions.insert(city_id, position);
 
             draw_hexagon(
                 city.x,
@@ -100,20 +125,6 @@ async fn main() {
                     println!("Clicked building {}", building_id);
                 }
             }
-        }
-        for (connection_id, owned_connection) in graph.connections.iter().enumerate() {
-            let connection_width = 10.0;
-            assert!(owned_connection.city_ids.len() == 2);
-            let start = city_positions
-                .get(owned_connection.city_ids.get(0).unwrap())
-                .unwrap()
-                .clone();
-            let end = city_positions
-                .get(owned_connection.city_ids.get(1).unwrap())
-                .unwrap()
-                .clone();
-
-            draw_line(start.x, start.y, end.x, end.y, connection_width, WHITE)
         }
         next_frame().await
     }
