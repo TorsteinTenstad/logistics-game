@@ -15,7 +15,7 @@ pub enum Material {
 }
 
 pub struct Recipe {
-    pub materials: HashMap<Material, i32>,
+    pub materials: Vec<(Material, i32)>,
 }
 
 #[derive(PartialEq, Eq, Hash)]
@@ -126,7 +126,8 @@ impl Graph {
                         *valid_recipe
                             .get_recipe()
                             .materials
-                            .get(&resource)
+                            .iter()
+                            .find_map(|(material, count)| (material == &resource).then_some(count))
                             .unwrap_or(&0i32)
                             * (*scale as i32)
                     })
