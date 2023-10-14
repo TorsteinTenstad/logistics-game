@@ -2,7 +2,7 @@ use macroquad::prelude::*;
 use std::{collections::HashMap, default};
 
 mod backend;
-use backend::{BuildingType, City, Graph, OwnedBuilding, OwnedConnection};
+use backend::{BuildingType, City, Graph, OwnedBuilding, OwnedConnection, ValidRecipe};
 
 #[macroquad::main("logistics-game")]
 async fn main() {
@@ -61,10 +61,14 @@ async fn main() {
         ],
     };
 
+    let mut selected_building: Option<(Vec2, usize, usize)> = None;
     loop {
         clear_background(BLACK);
 
-        let mouse_button_down = is_mouse_button_pressed(MouseButton::Left);
+        let mouse_button_pressed = is_mouse_button_pressed(MouseButton::Left);
+        if mouse_button_pressed {
+            selected_building = None;
+        }
         let (mouse_x, mouse_y) = mouse_position();
         let mouse_pos = Vec2::new(mouse_x, mouse_y);
         let mut city_positions = HashMap::<usize, (f32, f32)>::new();
@@ -98,7 +102,7 @@ async fn main() {
 
             let local_mouse_pos =
                 Vec2::from_angle(angle).rotate(mouse_pos - Vec2::new(start_x, start_y));
-            if mouse_button_down
+            if mouse_button_pressed
                 && local_mouse_pos.x.abs() < connection_width / 2.0
                 && local_mouse_pos.y > 0.0
                 && local_mouse_pos.y < v.length()
@@ -133,9 +137,85 @@ async fn main() {
                     0.5 * city_radius * f32::cos(rad) + city.y,
                 );
                 draw_circle(building_pos.x, building_pos.y, building_radius, BLUE);
-                if mouse_button_down && (mouse_pos - building_pos).length() < building_radius {
+                if mouse_button_pressed && (mouse_pos - building_pos).length() < building_radius {
                     println!("Clicked building {}", building_id);
+                    selected_building = Some((building_pos, city_id, building_id))
                 }
+            }
+        }
+
+        if let Some((building_pos, city_id, building_id)) = selected_building {
+            let mut texture_ids: Vec<String> = vec!["right_arrow".to_string()];
+            for (material, quantity) in graph
+                .cities
+                .get(city_id)
+                .unwrap()
+                .owned_buildings
+                .get(building_id)
+                .unwrap()
+                .production_scale
+                .keys()
+                .next()
+                .unwrap()
+                .get_recipe()
+                .materials
+                .iter()
+            {
+                let index = if *quantity < 0 { texture_ids.len() } else { 0 };
+                let element = match material {
+                    backend::Material::Chip => "chip",
+                    backend::Material::Gold => "gold",
+                    backend::Material::Energy => "energy",
+                    backend::Material::Worker => "worker",
+                    backend::Material::Engineer => "engineer",
+                    backend::Material::Wire => "wire",
+                    backend::Material::Computer => "computer",
+                    backend::Material::Log => "logs",
+                    backend::Material::Plank => "planks",
+                    backend::Material::Furniture => "chair",
+                };
+                texture_ids.insert(index, element.to_string());
+            }
+
+            let texture_size = 100.0;
+
+            let x = building_pos.x;
+            let y = building_pos.y;
+            let margin = 10.0;
+            let w = texture_ids.len() as f32 * (texture_size + margin) + margin;
+            let h = texture_size + 2.0 * margin;
+
+            draw_rectangle(
+                x,
+                y,
+                w,
+                h,
+                Color {
+                    r: 0.4,
+                    g: 0.4,
+                    b: 0.4,
+                    a: 1.0,
+                },
+            );
+
+            let mut x_ = x + margin;
+            let mut y_ = y + margin;
+            for texture_id in texture_ids {
+                let texture: Texture2D =
+                    load_texture(format!("assets/textures/{}.png", texture_id).as_str())
+                        .await
+                        .unwrap();
+                draw_texture_ex(
+                    &texture,
+                    x_,
+                    y_,
+                    WHITE,
+                    DrawTextureParams {
+                        dest_size: Some(Vec2::splat(texture_size)),
+                        ..Default::default()
+                    },
+                );
+                x_ += texture_size + margin;
             }
         }
         next_frame().await

@@ -38,13 +38,9 @@ impl ValidRecipe {
                 .collect(),
             },
             Self::PlankProduction => Recipe {
-                materials: (vec![
-                    (Material::Energy, 1),
-                    (Material::Log, 1),
-                    (Material::Plank, -1),
-                ])
-                .into_iter()
-                .collect(),
+                materials: (vec![(Material::Log, 1), (Material::Plank, -1)])
+                    .into_iter()
+                    .collect(),
             },
             Self::FurnitureProduction => Recipe {
                 materials: (vec![(Material::Plank, 1), (Material::Furniture, -1)])
@@ -67,7 +63,7 @@ impl BuildingType {
             Self::ComputerFactory => vec![ValidRecipe::ComputerAssembly],
             Self::WoodWorkingFactory => vec![
                 ValidRecipe::PlankProduction,
-                ValidRecipe::FurnitureProduction,
+                //ValidRecipe::FurnitureProduction,
             ],
         }
     }
