@@ -73,6 +73,7 @@ pub struct OwnedBuilding {
     pub building_type: BuildingType,
     pub production_scale: HashMap<ValidRecipe, u32>,
     pub owner_id: Option<usize>,
+    pub acquisition_cost: i32,
 }
 
 impl OwnedBuilding {
@@ -85,6 +86,7 @@ impl OwnedBuilding {
                 .map(|valid_recipe| (valid_recipe, 0))
                 .collect(),
             owner_id: None,
+            acquisition_cost: 100,
         }
     }
 }
@@ -98,18 +100,19 @@ pub struct City {
 pub struct OwnedConnection {
     pub city_ids: Vec<usize>,
     pub owner_id: Option<usize>,
+    pub acquisition_cost: i32,
 }
 
 #[derive(Default)]
 pub struct Graph {
     pub cities: Vec<City>,
     pub connections: Vec<OwnedConnection>,
+    pub businesses: Vec<Business>,
 }
 
 #[derive(Default)]
-struct Business {
-    capital: i32,
-    active_recipes: Vec<ValidRecipe>,
+pub struct Business {
+    pub capital: i32,
 }
 
 impl Graph {
