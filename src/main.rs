@@ -2,7 +2,9 @@ use macroquad::prelude::*;
 use std::{collections::HashMap, default};
 
 mod backend;
+mod ui;
 use backend::{BuildingType, Business, City, Graph, OwnedBuilding, OwnedConnection};
+use ui::*;
 
 enum SelectedAsset {
     Building((Vec2, usize, usize)),
@@ -212,18 +214,8 @@ async fn main() {
                     .get(building_id)
                     .unwrap();
 
-                let texture_size = 100.0;
-                let x = building_pos.x;
+                let x: f32 = building_pos.x;
                 let y = building_pos.y;
-                let margin = 10.0;
-                let ui_background_color = Color {
-                    r: 0.4,
-                    g: 0.4,
-                    b: 0.4,
-                    a: 1.0,
-                };
-                let mut x_ = x + margin;
-                let mut y_ = y + margin;
 
                 match building.owner_id {
                     Some(id) if id == current_user_business_id => {
@@ -252,11 +244,14 @@ async fn main() {
                             };
                             texture_ids.insert(index, element.to_string());
                         }
-                        let w = texture_ids.len() as f32 * (texture_size + margin) + margin;
-                        let h = texture_size + 2.0 * margin;
 
-                        draw_rectangle(x, y, w, h, ui_background_color);
+                        let w = texture_ids.len() as f32 * (TEXTURE_SIZE + MARGIN) + MARGIN;
+                        let h = TEXTURE_SIZE + 2.0 * MARGIN;
 
+                        draw_rectangle(x, y, w, h, UI_BACKGROUND_COLOR);
+
+                        let mut x_ = x + MARGIN;
+                        let mut y_ = y + MARGIN;
                         for texture_id in texture_ids {
                             let texture: Texture2D = load_texture(
                                 format!("assets/textures/{}.png", texture_id).as_str(),
@@ -269,11 +264,11 @@ async fn main() {
                                 y_,
                                 WHITE,
                                 DrawTextureParams {
-                                    dest_size: Some(Vec2::splat(texture_size)),
+                                    dest_size: Some(Vec2::splat(TEXTURE_SIZE)),
                                     ..Default::default()
                                 },
                             );
-                            x_ += texture_size + margin;
+                            x_ += TEXTURE_SIZE + MARGIN;
                         }
                     }
                     Some(other_user_business_id) => {
@@ -287,18 +282,8 @@ async fn main() {
 
                         match can_buy {
                             true => {
-                                let w = texture_size + 2.0 * margin;
-                                let h = texture_size + 2.0 * margin;
-                                draw_rectangle(x, y, w, h, ui_background_color);
-                                draw_rectangle(x_, y_, texture_size, texture_size, RED);
-                                draw_text("Buy", x_ + margin, y_ + texture_size / 2.0, 32.0, WHITE);
-                                let local_mouse_pos = mouse_pos - Vec2::new(x_, y_);
-                                if mouse_button_pressed
-                                    && local_mouse_pos.cmpgt(Vec2::ZERO).all()
-                                    && local_mouse_pos
-                                        .cmplt(Vec2::new(texture_size, texture_size))
-                                        .all()
-                                {
+                                let clicked = draw_buy_ui(x, y);
+                                if clicked && !ui_click_registered {
                                     ui_click_registered = true;
                                     let building = graph
                                         .cities
@@ -316,16 +301,7 @@ async fn main() {
                                 }
                             }
                             false => {
-                                let w = 3.5 * texture_size + 2.0 * margin;
-                                let h = 0.25 * texture_size + 2.0 * margin;
-                                draw_rectangle(x, y, w, h, ui_background_color);
-                                draw_text(
-                                    "Not connected to\nyour network",
-                                    x_ + margin,
-                                    y_ + h / 2.0,
-                                    24.0,
-                                    WHITE,
-                                );
+                                draw_message_box_ui(x, y, "Not connected\nto your network");
                             }
                         }
                     }
@@ -388,18 +364,8 @@ async fn main() {
 
                         match can_buy {
                             true => {
-                                let w = texture_size + 2.0 * margin;
-                                let h = texture_size + 2.0 * margin;
-                                draw_rectangle(x, y, w, h, ui_background_color);
-                                draw_rectangle(x_, y_, texture_size, texture_size, RED);
-                                draw_text("Buy", x_ + margin, y_ + texture_size / 2.0, 32.0, WHITE);
-                                let local_mouse_pos = mouse_pos - Vec2::new(x_, y_);
-                                if mouse_button_pressed
-                                    && local_mouse_pos.cmpgt(Vec2::ZERO).all()
-                                    && local_mouse_pos
-                                        .cmplt(Vec2::new(texture_size, texture_size))
-                                        .all()
-                                {
+                                let clicked = draw_buy_ui(x, y);
+                                if clicked && !ui_click_registered {
                                     let owned_connection =
                                         graph.connections.get_mut(connection_id).unwrap();
                                     ui_click_registered = true;
@@ -412,16 +378,7 @@ async fn main() {
                                 }
                             }
                             false => {
-                                let w = 3.5 * texture_size + 2.0 * margin;
-                                let h = 0.25 * texture_size + 2.0 * margin;
-                                draw_rectangle(x, y, w, h, ui_background_color);
-                                draw_text(
-                                    "Not connected to\nyour network",
-                                    x_ + margin,
-                                    y_ + h / 2.0,
-                                    24.0,
-                                    WHITE,
-                                );
+                                draw_message_box_ui(x, y, "Not connected\nto your network");
                             }
                         }
                     }
