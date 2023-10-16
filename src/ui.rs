@@ -17,7 +17,7 @@ pub fn draw_rectangle_with_click_detection(x: f32, y: f32, w: f32, h: f32, color
         return false;
     }
     let local_mouse_pos = Vec2::from_array(mouse_position().into()) - Vec2::new(x, y);
-    local_mouse_pos.cmpgt(Vec2::ZERO).all() && local_mouse_pos.cmplt(Vec2::new(x, y)).all()
+    local_mouse_pos.cmpgt(Vec2::ZERO).all() && local_mouse_pos.cmplt(Vec2::new(w, h)).all()
 }
 
 pub fn draw_buy_ui(x: f32, y: f32) -> bool {

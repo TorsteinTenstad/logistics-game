@@ -51,6 +51,11 @@ impl ValidRecipe {
     }
 }
 
+pub struct ScaledValidRecipe {
+    pub valid_recipe: ValidRecipe,
+    pub scale: u32,
+}
+
 #[derive(Clone, Copy)]
 pub enum BuildingType {
     WoodWorkingFactory,
@@ -71,7 +76,7 @@ impl BuildingType {
 
 pub struct OwnedBuilding {
     pub building_type: BuildingType,
-    pub production_scale: HashMap<ValidRecipe, u32>,
+    pub production_scale: Vec<ScaledValidRecipe>,
     pub owner_id: Option<usize>,
     pub acquisition_cost: i32,
 }
@@ -83,7 +88,10 @@ impl OwnedBuilding {
             production_scale: building_type
                 .get_valid_recipes()
                 .into_iter()
-                .map(|valid_recipe| (valid_recipe, 0))
+                .map(|valid_recipe| ScaledValidRecipe {
+                    valid_recipe: valid_recipe,
+                    scale: 0,
+                })
                 .collect(),
             owner_id: None,
             acquisition_cost: 100,
@@ -125,14 +133,15 @@ impl Graph {
                 owned_building
                     .production_scale
                     .iter()
-                    .map(|(valid_recipe, scale)| {
-                        *valid_recipe
+                    .map(|scaled_valid_recipe| {
+                        *scaled_valid_recipe
+                            .valid_recipe
                             .get_recipe()
                             .materials
                             .iter()
                             .find_map(|(material, count)| (material == &resource).then_some(count))
                             .unwrap_or(&0i32)
-                            * (*scale as i32)
+                            * (scaled_valid_recipe.scale as i32)
                     })
             })
             .sum()

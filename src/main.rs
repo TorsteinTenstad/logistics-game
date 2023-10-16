@@ -206,12 +206,12 @@ async fn main() {
         match selected_asset {
             SelectedAsset::None => {}
             SelectedAsset::Building((building_pos, city_id, building_id)) => {
-                let building = graph
+                let mut building = graph
                     .cities
-                    .get(city_id)
+                    .get_mut(city_id)
                     .unwrap()
                     .owned_buildings
-                    .get(building_id)
+                    .get_mut(building_id)
                     .unwrap();
 
                 let x: f32 = building_pos.x;
@@ -222,9 +222,9 @@ async fn main() {
                         let mut texture_ids: Vec<String> = vec!["right_arrow".to_string()];
                         for (material, quantity) in building
                             .production_scale
-                            .keys()
-                            .next()
+                            .get(0)
                             .unwrap()
+                            .valid_recipe
                             .get_recipe()
                             .materials
                             .iter()
@@ -245,13 +245,41 @@ async fn main() {
                             texture_ids.insert(index, element.to_string());
                         }
 
-                        let w = texture_ids.len() as f32 * (TEXTURE_SIZE + MARGIN) + MARGIN;
+                        let w = texture_ids.len() as f32 * (TEXTURE_SIZE + MARGIN)
+                            + 2.0 * MARGIN
+                            + 50.0;
                         let h = TEXTURE_SIZE + 2.0 * MARGIN;
 
                         draw_rectangle(x, y, w, h, UI_BACKGROUND_COLOR);
 
                         let mut x_ = x + MARGIN;
                         let mut y_ = y + MARGIN;
+
+                        let click_up =
+                            draw_rectangle_with_click_detection(x_, y_, 50.0, 25.0, BLACK);
+                        let click_down = draw_rectangle_with_click_detection(
+                            x_,
+                            y + h - MARGIN - 25.0,
+                            50.0,
+                            25.0,
+                            BLACK,
+                        );
+                        let scaled_valid_recipe = building.production_scale.get_mut(0).unwrap();
+                        match (click_up, click_down) {
+                            (true, false) => scaled_valid_recipe.scale += 1,
+                            (false, true) => scaled_valid_recipe.scale -= 1,
+                            _ => (),
+                        };
+                        ui_click_registered |= click_up || click_down;
+                        draw_text(
+                            format!("{}", scaled_valid_recipe.scale).as_str(),
+                            x_ + 25.0,
+                            y_ + h / 2.0,
+                            32.0,
+                            WHITE,
+                        );
+                        x_ += 50.0 + MARGIN;
+
                         for texture_id in texture_ids {
                             let texture: Texture2D = load_texture(
                                 format!("assets/textures/{}.png", texture_id).as_str(),
