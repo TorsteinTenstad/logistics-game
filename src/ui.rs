@@ -1,7 +1,5 @@
 use macroquad::prelude::*;
 
-use crate::backend::OwnedBuilding;
-
 pub const UI_BACKGROUND_COLOR: macroquad::color::Color = Color {
     r: 0.4,
     g: 0.4,
@@ -12,23 +10,45 @@ pub const TEXTURE_SIZE: f32 = 100.0;
 pub const ICON_SIZE: f32 = 50.0;
 pub const MARGIN: f32 = 10.0;
 
-pub fn draw_rectangle_with_click_detection(x: f32, y: f32, w: f32, h: f32, color: Color) -> bool {
-    draw_rectangle(x, y, w, h, color);
-    if !is_mouse_button_pressed(MouseButton::Left) {
-        return false;
-    }
-    let local_mouse_pos = Vec2::from_array(mouse_position().into()) - Vec2::new(x, y);
-    local_mouse_pos.cmpgt(Vec2::ZERO).all() && local_mouse_pos.cmplt(Vec2::new(w, h)).all()
+#[derive(Debug, PartialEq, Eq)]
+pub enum ButtonState {
+    None,
+    Hover,
+    Pressed,
 }
 
-pub fn draw_buy_ui(x: f32, y: f32) -> bool {
+pub fn draw_button(x: f32, y: f32, w: f32, h: f32, color: Color) -> ButtonState {
+    draw_rectangle(x, y, w, h, color);
+    let local_mouse_pos = Vec2::from_array(mouse_position().into()) - Vec2::new(x, y);
+    match (
+        local_mouse_pos.cmpgt(Vec2::ZERO).all() && local_mouse_pos.cmplt(Vec2::new(w, h)).all(),
+        is_mouse_button_pressed(MouseButton::Left),
+    ) {
+        (true, true) => ButtonState::Pressed,
+        (true, false) => ButtonState::Hover,
+        _ => ButtonState::None,
+    }
+}
+
+pub fn draw_buy_ui(x: f32, y: f32) -> ButtonState {
     let w = TEXTURE_SIZE + 2.0 * MARGIN;
     let h = TEXTURE_SIZE + 2.0 * MARGIN;
     let mut x_ = x + MARGIN;
     let mut y_ = y + MARGIN;
     draw_rectangle(x, y, w, h, UI_BACKGROUND_COLOR);
-    let clicked = draw_rectangle_with_click_detection(x_, y_, TEXTURE_SIZE, TEXTURE_SIZE, RED);
+    let clicked = draw_button(x_, y_, TEXTURE_SIZE, TEXTURE_SIZE, RED);
     draw_text("Buy", x_ + MARGIN, y_ + TEXTURE_SIZE / 2.0, 32.0, WHITE);
+    clicked
+}
+
+pub fn draw_next_turn_button(x: f32, y: f32) -> ButtonState {
+    let w = 150.0 + 2.0 * MARGIN;
+    let h = 50.0 + 2.0 * MARGIN;
+    let mut x_ = x + MARGIN;
+    let mut y_ = y + MARGIN;
+    draw_rectangle(x, y, w, h, UI_BACKGROUND_COLOR);
+    let clicked = draw_button(x_, y_, 150.0, 50.0, RED);
+    draw_text("Next turn", x_ + MARGIN, y_ + 50.0 / 2.0, 32.0, WHITE);
     clicked
 }
 

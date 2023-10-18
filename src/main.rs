@@ -3,7 +3,9 @@ use std::{collections::HashMap, default};
 
 mod backend;
 mod ui;
-use backend::{BuildingType, Business, City, Graph, OwnedBuilding, OwnedConnection};
+use backend::{
+    BuildingType, Business, City, Graph, OwnedBuilding, OwnedConnection, ScaledValidRecipe,
+};
 use ui::*;
 
 enum SelectedAsset {
@@ -20,7 +22,7 @@ async fn main() {
             City {
                 x: 260.0,
                 y: 60.0,
-                owned_buildings: vec![OwnedBuilding::new(BuildingType::ComputerFactory)],
+                owned_buildings: vec![OwnedBuilding::new(BuildingType::Market)],
             },
             City {
                 x: 500.0,
@@ -31,15 +33,15 @@ async fn main() {
                 x: 280.0,
                 y: 300.0,
                 owned_buildings: vec![
-                    OwnedBuilding::new(BuildingType::WoodWorkingFactory),
-                    OwnedBuilding::new(BuildingType::ComputerFactory),
+                    OwnedBuilding::new(BuildingType::SandPlant),
+                    OwnedBuilding::new(BuildingType::Mine),
                 ],
             },
             City {
                 x: 600.0,
                 y: 280.0,
                 owned_buildings: vec![
-                    OwnedBuilding::new(BuildingType::WoodWorkingFactory),
+                    OwnedBuilding::new(BuildingType::MetalRefinery),
                     OwnedBuilding::new(BuildingType::WoodWorkingFactory),
                     OwnedBuilding::new(BuildingType::ComputerFactory),
                 ],
@@ -97,6 +99,10 @@ async fn main() {
         "planks",
         "chair",
         "right_arrow",
+        "money",
+        "rocks",
+        "sand",
+        "energy",
     ] {
         textures.insert(
             texture_id.to_string(),
@@ -210,14 +216,7 @@ async fn main() {
 
         let x_ = MARGIN;
         let mut y_ = MARGIN;
-        let delta = graph.get_resource_delta(current_user_business_id);
-        for (material, quantity) in graph
-            .businesses
-            .get(current_user_business_id)
-            .unwrap()
-            .resources
-            .iter()
-        {
+        for (material, quantity_info) in graph.get_resource_stock(current_user_business_id) {
             draw_texture_ex(
                 textures.get(&material.get_texture_id()).unwrap(),
                 x_,
@@ -230,7 +229,12 @@ async fn main() {
             );
 
             draw_text(
-                format!("{}/{}", quantity, delta.get(&material).unwrap_or(&0)).as_str(),
+                format!(
+                    "{}/{}",
+                    quantity_info.quantity,
+                    quantity_info.gross_in - quantity_info.gross_out,
+                )
+                .as_str(),
                 x_ + ICON_SIZE + MARGIN,
                 y_ + ICON_SIZE / 2.0,
                 24.0,
@@ -239,15 +243,14 @@ async fn main() {
             y_ += ICON_SIZE + MARGIN;
         }
 
-        let update = draw_buy_ui(screen_width() - 200.0, 200.0);
-        if update {
+        if ButtonState::Pressed == draw_next_turn_button(screen_width() - 200.0, 200.0) {
             graph.update_business_resources(current_user_business_id);
         }
 
         match selected_asset {
             SelectedAsset::None => {}
             SelectedAsset::Building((building_pos, city_id, building_id)) => {
-                let mut building = graph
+                let building = graph
                     .cities
                     .get_mut(city_id)
                     .unwrap()
@@ -260,68 +263,67 @@ async fn main() {
 
                 match building.owner_id {
                     Some(id) if id == current_user_business_id => {
-                        let mut texture_ids: Vec<String> = vec!["right_arrow".to_string()];
-                        for (material, quantity) in building
-                            .production_scale
-                            .get(0)
-                            .unwrap()
-                            .valid_recipe
-                            .get_recipe()
-                            .materials
-                            .iter()
-                        {
-                            let index = if *quantity < 0 { texture_ids.len() } else { 0 };
-                            texture_ids.insert(index, material.get_texture_id());
-                        }
-
-                        let w = texture_ids.len() as f32 * (TEXTURE_SIZE + MARGIN)
-                            + 2.0 * MARGIN
-                            + 50.0;
-                        let h = TEXTURE_SIZE + 2.0 * MARGIN;
-
-                        draw_rectangle(x, y, w, h, UI_BACKGROUND_COLOR);
-
                         let mut x_ = x + MARGIN;
                         let mut y_ = y + MARGIN;
 
-                        let click_up =
-                            draw_rectangle_with_click_detection(x_, y_, 50.0, 25.0, BLACK);
-                        let click_down = draw_rectangle_with_click_detection(
-                            x_,
-                            y + h - MARGIN - 25.0,
-                            50.0,
-                            25.0,
-                            BLACK,
-                        );
-                        let scaled_valid_recipe = building.production_scale.get_mut(0).unwrap();
-                        match (click_up, click_down) {
-                            (true, false) => scaled_valid_recipe.scale += 1,
-                            (false, true) => scaled_valid_recipe.scale -= 1,
-                            _ => (),
-                        };
-                        ui_click_registered |= click_up || click_down;
-                        draw_text(
-                            format!("{}", scaled_valid_recipe.scale).as_str(),
-                            x_ + 25.0,
-                            y_ + h / 2.0,
-                            32.0,
-                            WHITE,
-                        );
-                        x_ += 50.0 + MARGIN;
+                        let w = 5 as f32 * (TEXTURE_SIZE + MARGIN) + 2.0 * MARGIN + 50.0;
+                        let h = (TEXTURE_SIZE + MARGIN) * building.production_scale.len() as f32
+                            + MARGIN;
+                        draw_rectangle(x, y, w, h, UI_BACKGROUND_COLOR);
 
-                        for texture_id in texture_ids {
-                            let texture = textures.get(&texture_id).unwrap();
-                            draw_texture_ex(
-                                &texture,
-                                x_,
-                                y_,
+                        for ScaledValidRecipe {
+                            valid_recipe,
+                            scale,
+                        } in building.production_scale.iter_mut()
+                        {
+                            let mut texture_ids: Vec<String> = vec!["right_arrow".to_string()];
+
+                            for (material, quantity) in valid_recipe.get_recipe().materials.iter() {
+                                let index = if *quantity > 0 { texture_ids.len() } else { 0 };
+                                texture_ids.insert(index, material.get_texture_id());
+                            }
+
+                            let click_up =
+                                ButtonState::Pressed == draw_button(x_, y_, 50.0, 25.0, BLACK);
+                            let click_down = ButtonState::Pressed
+                                == draw_button(
+                                    x_,
+                                    y_ + TEXTURE_SIZE - MARGIN - 25.0,
+                                    50.0,
+                                    25.0,
+                                    BLACK,
+                                );
+                            match (click_up, click_down, *scale == 0) {
+                                (true, false, _) => *scale += 1,
+                                (false, true, false) => *scale -= 1,
+                                _ => (),
+                            };
+                            ui_click_registered |= click_up || click_down;
+                            draw_text(
+                                format!("{}", scale).as_str(),
+                                x_ + 25.0,
+                                y_ + TEXTURE_SIZE / 2.0,
+                                32.0,
                                 WHITE,
-                                DrawTextureParams {
-                                    dest_size: Some(Vec2::splat(TEXTURE_SIZE)),
-                                    ..Default::default()
-                                },
                             );
-                            x_ += TEXTURE_SIZE + MARGIN;
+                            x_ += 50.0 + MARGIN;
+
+                            for texture_id in texture_ids {
+                                let texture = textures.get(&texture_id).unwrap();
+                                draw_texture_ex(
+                                    &texture,
+                                    x_,
+                                    y_,
+                                    WHITE,
+                                    DrawTextureParams {
+                                        dest_size: Some(Vec2::splat(TEXTURE_SIZE)),
+                                        ..Default::default()
+                                    },
+                                );
+                                x_ += TEXTURE_SIZE + MARGIN;
+                            }
+                            x_ = x + MARGIN;
+                            y_ += TEXTURE_SIZE + MARGIN;
                         }
                     }
                     Some(other_user_business_id) => {
@@ -335,7 +337,7 @@ async fn main() {
 
                         match can_buy {
                             true => {
-                                let clicked = draw_buy_ui(x, y);
+                                let clicked = ButtonState::Pressed == draw_buy_ui(x, y);
                                 if clicked && !ui_click_registered {
                                     ui_click_registered = true;
                                     let building = graph
@@ -351,7 +353,7 @@ async fn main() {
                                         .get_mut(current_user_business_id)
                                         .unwrap()
                                         .resources
-                                        .get_mut(&backend::Material::Gold)
+                                        .get_mut(&backend::Material::Money)
                                         .unwrap() -= building.acquisition_cost;
                                 }
                             }
@@ -419,7 +421,7 @@ async fn main() {
 
                         match can_buy {
                             true => {
-                                let clicked = draw_buy_ui(x, y);
+                                let clicked = ButtonState::Pressed == draw_buy_ui(x, y);
                                 if clicked && !ui_click_registered {
                                     let owned_connection =
                                         graph.connections.get_mut(connection_id).unwrap();
@@ -430,7 +432,7 @@ async fn main() {
                                         .get_mut(current_user_business_id)
                                         .unwrap()
                                         .resources
-                                        .get_mut(&backend::Material::Gold)
+                                        .get_mut(&backend::Material::Money)
                                         .unwrap() -= owned_connection.acquisition_cost;
                                 }
                             }
