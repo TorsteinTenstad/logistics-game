@@ -18,17 +18,17 @@ async fn main() {
     let mut graph = Graph {
         cities: vec![
             City {
-                x: 60.0,
+                x: 260.0,
                 y: 60.0,
                 owned_buildings: vec![OwnedBuilding::new(BuildingType::ComputerFactory)],
             },
             City {
-                x: 300.0,
+                x: 500.0,
                 y: 100.0,
                 owned_buildings: vec![OwnedBuilding::new(BuildingType::ComputerFactory)],
             },
             City {
-                x: 80.0,
+                x: 280.0,
                 y: 300.0,
                 owned_buildings: vec![
                     OwnedBuilding::new(BuildingType::WoodWorkingFactory),
@@ -36,7 +36,7 @@ async fn main() {
                 ],
             },
             City {
-                x: 400.0,
+                x: 600.0,
                 y: 280.0,
                 owned_buildings: vec![
                     OwnedBuilding::new(BuildingType::WoodWorkingFactory),
@@ -45,7 +45,7 @@ async fn main() {
                 ],
             },
             City {
-                x: 200.0,
+                x: 400.0,
                 y: 380.0,
                 owned_buildings: vec![OwnedBuilding::new(BuildingType::ComputerFactory)],
             },
@@ -72,7 +72,7 @@ async fn main() {
                 acquisition_cost: 50,
             },
         ],
-        businesses: vec![Business { capital: 1000 }],
+        businesses: vec![Business::new()],
     };
 
     graph
@@ -85,27 +85,32 @@ async fn main() {
         .owner_id = Some(current_user_business_id);
 
     let mut selected_asset: SelectedAsset = SelectedAsset::None;
-    let mut ui_click_registered = false;
+    let mut ui_click_registered;
+
+    let mut textures: HashMap<String, Texture2D> = HashMap::new();
+    for texture_id in vec![
+        "chip",
+        "gold",
+        "wire",
+        "computer",
+        "logs",
+        "planks",
+        "chair",
+        "right_arrow",
+    ] {
+        textures.insert(
+            texture_id.to_string(),
+            load_texture(format!("assets/textures/{}.png", texture_id).as_str())
+                .await
+                .unwrap(),
+        );
+    }
+
+    request_new_screen_size(1920.0, 1080.0);
+
     loop {
         clear_background(BLACK);
 
-        draw_text_ex(
-            format!(
-                "$ {}",
-                graph
-                    .businesses
-                    .get(current_user_business_id)
-                    .unwrap()
-                    .capital
-            )
-            .as_str(),
-            10.0,
-            screen_height() - 10.0,
-            TextParams {
-                font_size: 32,
-                ..Default::default()
-            },
-        );
         ui_click_registered = false;
         let mouse_button_pressed = is_mouse_button_pressed(MouseButton::Left);
         let (mouse_x, mouse_y) = mouse_position();
@@ -203,6 +208,42 @@ async fn main() {
             }
         }
 
+        let x_ = MARGIN;
+        let mut y_ = MARGIN;
+        let delta = graph.get_resource_delta(current_user_business_id);
+        for (material, quantity) in graph
+            .businesses
+            .get(current_user_business_id)
+            .unwrap()
+            .resources
+            .iter()
+        {
+            draw_texture_ex(
+                textures.get(&material.get_texture_id()).unwrap(),
+                x_,
+                y_,
+                WHITE,
+                DrawTextureParams {
+                    dest_size: Some(Vec2::splat(ICON_SIZE)),
+                    ..Default::default()
+                },
+            );
+
+            draw_text(
+                format!("{}/{}", quantity, delta.get(&material).unwrap_or(&0)).as_str(),
+                x_ + ICON_SIZE + MARGIN,
+                y_ + ICON_SIZE / 2.0,
+                24.0,
+                WHITE,
+            );
+            y_ += ICON_SIZE + MARGIN;
+        }
+
+        let update = draw_buy_ui(screen_width() - 200.0, 200.0);
+        if update {
+            graph.update_business_resources(current_user_business_id);
+        }
+
         match selected_asset {
             SelectedAsset::None => {}
             SelectedAsset::Building((building_pos, city_id, building_id)) => {
@@ -230,19 +271,7 @@ async fn main() {
                             .iter()
                         {
                             let index = if *quantity < 0 { texture_ids.len() } else { 0 };
-                            let element = match material {
-                                backend::Material::Chip => "chip",
-                                backend::Material::Gold => "gold",
-                                backend::Material::Energy => "energy",
-                                backend::Material::Worker => "worker",
-                                backend::Material::Engineer => "engineer",
-                                backend::Material::Wire => "wire",
-                                backend::Material::Computer => "computer",
-                                backend::Material::Log => "logs",
-                                backend::Material::Plank => "planks",
-                                backend::Material::Furniture => "chair",
-                            };
-                            texture_ids.insert(index, element.to_string());
+                            texture_ids.insert(index, material.get_texture_id());
                         }
 
                         let w = texture_ids.len() as f32 * (TEXTURE_SIZE + MARGIN)
@@ -281,11 +310,7 @@ async fn main() {
                         x_ += 50.0 + MARGIN;
 
                         for texture_id in texture_ids {
-                            let texture: Texture2D = load_texture(
-                                format!("assets/textures/{}.png", texture_id).as_str(),
-                            )
-                            .await
-                            .unwrap();
+                            let texture = textures.get(&texture_id).unwrap();
                             draw_texture_ex(
                                 &texture,
                                 x_,
@@ -321,11 +346,13 @@ async fn main() {
                                         .get_mut(building_id)
                                         .unwrap();
                                     building.owner_id = Some(current_user_business_id);
-                                    graph
+                                    *graph
                                         .businesses
                                         .get_mut(current_user_business_id)
                                         .unwrap()
-                                        .capital -= building.acquisition_cost;
+                                        .resources
+                                        .get_mut(&backend::Material::Gold)
+                                        .unwrap() -= building.acquisition_cost;
                                 }
                             }
                             false => {
@@ -398,11 +425,13 @@ async fn main() {
                                         graph.connections.get_mut(connection_id).unwrap();
                                     ui_click_registered = true;
                                     owned_connection.owner_id = Some(current_user_business_id);
-                                    graph
+                                    *graph
                                         .businesses
                                         .get_mut(current_user_business_id)
                                         .unwrap()
-                                        .capital -= owned_connection.acquisition_cost;
+                                        .resources
+                                        .get_mut(&backend::Material::Gold)
+                                        .unwrap() -= owned_connection.acquisition_cost;
                                 }
                             }
                             false => {

@@ -1,6 +1,6 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Material {
     Gold,
     Energy,
@@ -12,6 +12,24 @@ pub enum Material {
     Log,
     Plank,
     Furniture,
+}
+
+impl Material {
+    pub fn get_texture_id(&self) -> String {
+        match self {
+            Self::Chip => "chip",
+            Self::Gold => "gold",
+            Self::Energy => "energy",
+            Self::Worker => "worker",
+            Self::Engineer => "engineer",
+            Self::Wire => "wire",
+            Self::Computer => "computer",
+            Self::Log => "logs",
+            Self::Plank => "planks",
+            Self::Furniture => "chair",
+        }
+        .to_string()
+    }
 }
 
 pub struct Recipe {
@@ -120,10 +138,52 @@ pub struct Graph {
 
 #[derive(Default)]
 pub struct Business {
-    pub capital: i32,
+    pub resources: BTreeMap<Material, i32>,
+}
+
+impl Business {
+    pub fn new() -> Self {
+        Self {
+            resources: BTreeMap::from([(Material::Gold, 1000)]),
+        }
+    }
 }
 
 impl Graph {
+    pub fn get_resource_delta(&self, business_id: usize) -> BTreeMap<Material, i32> {
+        let mut resource_delta: BTreeMap<Material, i32> = BTreeMap::new();
+        for ScaledValidRecipe {
+            valid_recipe,
+            scale,
+        } in self
+            .cities
+            .iter()
+            .flat_map(|city| city.owned_buildings.iter())
+            .filter(|owned_building| owned_building.owner_id == Some(business_id))
+            .flat_map(|owned_building| owned_building.production_scale.iter())
+        {
+            for (material, quantity) in valid_recipe.get_recipe().materials {
+                let scaled_quantity = quantity * scale.clone() as i32;
+                if let Some(total_quantity) = resource_delta.get_mut(&material) {
+                    *total_quantity += scaled_quantity;
+                } else {
+                    resource_delta.insert(material, scaled_quantity);
+                }
+            }
+        }
+        resource_delta
+    }
+    pub fn update_business_resources(&mut self, business_id: usize) {
+        let resource_delta = self.get_resource_delta(business_id);
+        let business = self.businesses.get_mut(business_id).unwrap();
+        for (material, delta) in resource_delta {
+            if let Some(quantity) = business.resources.get_mut(&material) {
+                *quantity += delta;
+            } else {
+                business.resources.insert(material, delta);
+            }
+        }
+    }
     fn get_net_products(&self, business_id: usize, resource: Material) -> i32 {
         self.cities
             .iter()

@@ -9,6 +9,7 @@ pub const UI_BACKGROUND_COLOR: macroquad::color::Color = Color {
     a: 1.0,
 };
 pub const TEXTURE_SIZE: f32 = 100.0;
+pub const ICON_SIZE: f32 = 50.0;
 pub const MARGIN: f32 = 10.0;
 
 pub fn draw_rectangle_with_click_detection(x: f32, y: f32, w: f32, h: f32, color: Color) -> bool {
