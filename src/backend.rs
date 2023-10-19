@@ -192,6 +192,15 @@ pub struct QuantityInfo {
     pub gross_out: i32,
 }
 
+impl QuantityInfo {
+    pub fn net_in(&self) -> i32 {
+        self.gross_in - self.gross_out
+    }
+    pub fn net_out(&self) -> i32 {
+        self.gross_out - self.gross_in
+    }
+}
+
 impl Graph {
     pub fn get_resource_stock(&self, business_id: usize) -> BTreeMap<Material, QuantityInfo> {
         let mut resource_stock: BTreeMap<Material, QuantityInfo> = BTreeMap::new();

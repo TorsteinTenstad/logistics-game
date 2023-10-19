@@ -250,6 +250,7 @@ async fn main() {
         match selected_asset {
             SelectedAsset::None => {}
             SelectedAsset::Building((building_pos, city_id, building_id)) => {
+                let resource_stock = graph.get_resource_stock(current_user_business_id);
                 let building = graph
                     .cities
                     .get_mut(city_id)
@@ -293,11 +294,28 @@ async fn main() {
                                     25.0,
                                     BLACK,
                                 );
-                            match (click_up, click_down, *scale == 0) {
-                                (true, false, _) => *scale += 1,
-                                (false, true, false) => *scale -= 1,
-                                _ => (),
+                            let requested_increment = match (click_up, click_down, *scale == 0) {
+                                (true, false, _) => 1,
+                                (false, true, false) => -1,
+                                _ => 0,
                             };
+                            let can_increment = !ui_click_registered
+                                && requested_increment != 0
+                                && valid_recipe.get_recipe().materials.iter().all(
+                                    |(material, quantity)| match resource_stock.get(material) {
+                                        Some(quantity_info) => {
+                                            quantity_info.quantity
+                                                + requested_increment * quantity
+                                                + quantity_info.gross_in
+                                                - quantity_info.gross_out
+                                                >= 0
+                                        }
+                                        None => requested_increment * *quantity >= 0,
+                                    },
+                                );
+                            if can_increment {
+                                *scale += requested_increment;
+                            }
                             ui_click_registered |= click_up || click_down;
                             draw_text(
                                 format!("{}", scale).as_str(),
