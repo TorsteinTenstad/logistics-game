@@ -80,15 +80,6 @@ async fn main() {
         businesses: vec![Business::new()],
     };
 
-    graph
-        .cities
-        .get_mut(0)
-        .unwrap()
-        .owned_buildings
-        .get_mut(0)
-        .unwrap()
-        .owner_id = Some(current_user_business_id);
-
     let mut open_asset_ui_opt: Option<AssetUI> = None;
 
     let mut textures: HashMap<String, Texture2D> = HashMap::new();
@@ -127,6 +118,15 @@ async fn main() {
             relative_mouse_pos.cmpgt(Vec2::ZERO).all()
                 && relative_mouse_pos.cmplt(ui.size.unwrap()).all()
         });
+
+        let owns_nothing =
+            graph.connections.iter().all(|owned_connection| {
+                owned_connection.owner_id != Some(current_user_business_id)
+            }) && graph
+                .cities
+                .iter()
+                .flat_map(|city| city.owned_buildings.iter())
+                .all(|owned_building| owned_building.owner_id != Some(current_user_business_id));
 
         let mut city_positions = HashMap::<usize, (f32, f32)>::new();
         for (city_id, city) in graph.cities.iter().enumerate() {
@@ -278,10 +278,11 @@ async fn main() {
                             todo!()
                         }
                         None => {
-                            let can_buy = graph.connections.iter().any(|owned_connection| {
-                                owned_connection.owner_id == Some(current_user_business_id)
-                                    && owned_connection.city_ids.contains(&city_id)
-                            });
+                            let can_buy = owns_nothing
+                                || graph.connections.iter().any(|owned_connection| {
+                                    owned_connection.owner_id == Some(current_user_business_id)
+                                        && owned_connection.city_ids.contains(&city_id)
+                                });
 
                             match can_buy {
                                 true => {
