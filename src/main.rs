@@ -1,11 +1,9 @@
 use macroquad::prelude::*;
-use std::{collections::HashMap, default};
+use std::collections::HashMap;
 
 mod backend;
 mod ui;
-use backend::{
-    BuildingType, Business, City, Graph, OwnedBuilding, OwnedConnection, ScaledValidRecipe,
-};
+use backend::{BuildingType, Business, City, Graph, OwnedBuilding, OwnedConnection};
 use ui::*;
 
 enum Asset {
@@ -129,12 +127,6 @@ async fn main() {
             relative_mouse_pos.cmpgt(Vec2::ZERO).all()
                 && relative_mouse_pos.cmplt(ui.size.unwrap()).all()
         });
-        if cursor_inside_asset_ui {
-            match open_asset_ui_opt.as_ref().unwrap().asset {
-                Asset::Building(_) => println!("In building ui"),
-                Asset::Connection(_) => println!("In connection ui"),
-            }
-        }
 
         let mut city_positions = HashMap::<usize, (f32, f32)>::new();
         for (city_id, city) in graph.cities.iter().enumerate() {
@@ -177,7 +169,6 @@ async fn main() {
                 && local_mouse_pos.y > 0.0
                 && local_mouse_pos.y < v.length()
             {
-                println!("Clicked connection {}", connection_id);
                 open_asset_ui_opt = Some(AssetUI {
                     asset: Asset::Connection(connection_id),
                     position: Vec2::new((start_x + end_x) / 2.0, (start_y + end_y) / 2.0),
@@ -223,7 +214,6 @@ async fn main() {
                 );
                 if !cursor_inside_asset_ui && (mouse_pos - building_pos).length() < building_radius
                 {
-                    println!("Clicked building {}", building_id);
                     open_asset_ui_opt = Some(AssetUI {
                         asset: Asset::Building((city_id, building_id)),
                         position: building_pos,
@@ -277,94 +267,12 @@ async fn main() {
                         .get_mut(building_id)
                         .unwrap();
 
-                    let x: f32 = open_asset_ui.position.x;
+                    let x = open_asset_ui.position.x;
                     let y = open_asset_ui.position.y;
 
-                    match building.owner_id {
+                    open_asset_ui.size = Some(match building.owner_id {
                         Some(id) if id == current_user_business_id => {
-                            let mut x_ = x + MARGIN;
-                            let mut y_ = y + MARGIN;
-
-                            let w = 5 as f32 * (TEXTURE_SIZE + MARGIN) + 2.0 * MARGIN + 50.0;
-                            let h = (TEXTURE_SIZE + MARGIN)
-                                * building.production_scale.len() as f32
-                                + MARGIN;
-                            open_asset_ui.size = Some(Vec2::new(w, h));
-                            draw_rectangle(x, y, w, h, UI_BACKGROUND_COLOR);
-
-                            for ScaledValidRecipe {
-                                valid_recipe,
-                                scale,
-                            } in building.production_scale.iter_mut()
-                            {
-                                let mut texture_ids: Vec<String> = vec!["right_arrow".to_string()];
-
-                                for (material, quantity) in
-                                    valid_recipe.get_recipe().materials.iter()
-                                {
-                                    let index = if *quantity > 0 { texture_ids.len() } else { 0 };
-                                    texture_ids.insert(index, material.get_texture_id());
-                                }
-
-                                let click_up = ButtonState::Pressed
-                                    == draw_button(x_, y_, 50.0, 25.0, BLACK).0;
-                                let click_down = ButtonState::Pressed
-                                    == draw_button(
-                                        x_,
-                                        y_ + TEXTURE_SIZE - MARGIN - 25.0,
-                                        50.0,
-                                        25.0,
-                                        BLACK,
-                                    )
-                                    .0;
-                                let requested_increment = match (click_up, click_down, *scale == 0)
-                                {
-                                    (true, false, _) => 1,
-                                    (false, true, false) => -1,
-                                    _ => 0,
-                                };
-                                let can_increment = requested_increment != 0
-                                    && valid_recipe.get_recipe().materials.iter().all(
-                                        |(material, quantity)| match resource_stock.get(material) {
-                                            Some(quantity_info) => {
-                                                quantity_info.quantity
-                                                    + requested_increment * quantity
-                                                    + quantity_info.gross_in
-                                                    - quantity_info.gross_out
-                                                    >= 0
-                                            }
-                                            None => requested_increment * *quantity >= 0,
-                                        },
-                                    );
-                                if can_increment {
-                                    *scale += requested_increment;
-                                }
-                                draw_text(
-                                    format!("{}", scale).as_str(),
-                                    x_ + 25.0,
-                                    y_ + TEXTURE_SIZE / 2.0,
-                                    32.0,
-                                    WHITE,
-                                );
-                                x_ += 50.0 + MARGIN;
-
-                                for texture_id in texture_ids {
-                                    let texture = textures.get(&texture_id).unwrap();
-                                    draw_texture_ex(
-                                        &texture,
-                                        x_,
-                                        y_,
-                                        WHITE,
-                                        DrawTextureParams {
-                                            dest_size: Some(Vec2::splat(TEXTURE_SIZE)),
-                                            ..Default::default()
-                                        },
-                                    );
-                                    x_ += TEXTURE_SIZE + MARGIN;
-                                }
-                                x_ = x + MARGIN;
-                                y_ += TEXTURE_SIZE + MARGIN;
-                            }
+                            draw_recipes_panel(x, y, building, &resource_stock, &textures)
                         }
                         Some(other_user_business_id) => {
                             todo!()
@@ -378,15 +286,7 @@ async fn main() {
                             match can_buy {
                                 true => {
                                     let (buy_ui_state, size) = draw_buy_ui(x, y);
-                                    open_asset_ui.size = Some(size);
                                     if buy_ui_state == ButtonState::Pressed {
-                                        let building = graph
-                                            .cities
-                                            .get_mut(city_id)
-                                            .unwrap()
-                                            .owned_buildings
-                                            .get_mut(building_id)
-                                            .unwrap();
                                         building.owner_id = Some(current_user_business_id);
                                         *graph
                                             .businesses
@@ -396,20 +296,33 @@ async fn main() {
                                             .get_mut(&backend::Material::Money)
                                             .unwrap() -= building.acquisition_cost;
                                     }
+                                    draw_recipes_panel(
+                                        x,
+                                        y + size.y,
+                                        building,
+                                        &resource_stock,
+                                        &textures,
+                                    ) + Vec2::new(0.0, size.y)
                                 }
                                 false => {
                                     let size =
                                         draw_message_box_ui(x, y, "Not connected\nto your network");
-                                    open_asset_ui.size = Some(size);
+
+                                    draw_recipes_panel(
+                                        x,
+                                        y + size.y,
+                                        building,
+                                        &resource_stock,
+                                        &textures,
+                                    ) + Vec2::new(0.0, size.y)
                                 }
                             }
                         }
-                    }
+                    })
                 }
                 Asset::Connection(connection_id) => {
                     let owned_connection = graph.connections.get(connection_id).unwrap();
 
-                    let texture_size = 100.0;
                     let (start_x, start_y) = city_positions
                         .get(owned_connection.city_ids.get(0).unwrap())
                         .unwrap()
@@ -420,15 +333,6 @@ async fn main() {
                         .clone();
                     let x = (start_x + end_x) / 2.0;
                     let y = (start_y + end_y) / 2.0;
-                    let margin = 10.0;
-                    let ui_background_color = Color {
-                        r: 0.4,
-                        g: 0.4,
-                        b: 0.4,
-                        a: 1.0,
-                    };
-                    let mut x_ = x + margin;
-                    let mut y_ = y + margin;
 
                     match owned_connection.owner_id {
                         Some(id) if id == current_user_business_id => {
