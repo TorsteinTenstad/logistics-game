@@ -17,9 +17,17 @@ struct AssetUI {
     pub size: Option<Vec2>,
 }
 
+fn get_player_color(player_id: usize) -> Color {
+    match player_id {
+        0 => BLUE,
+        1 => GREEN,
+        2 => YELLOW,
+        _ => todo!(),
+    }
+}
+
 #[macroquad::main("logistics-game")]
 async fn main() {
-    let current_user_business_id = 0;
     let mut graph = Graph {
         cities: vec![
             City {
@@ -77,8 +85,10 @@ async fn main() {
                 acquisition_cost: 50,
             },
         ],
-        businesses: vec![Business::new()],
+        businesses: vec![Business::new(), Business::new()],
     };
+
+    let mut current_player_id = 0;
 
     let mut open_asset_ui_opt: Option<AssetUI> = None;
 
@@ -119,14 +129,15 @@ async fn main() {
                 && relative_mouse_pos.cmplt(ui.size.unwrap()).all()
         });
 
-        let owns_nothing =
-            graph.connections.iter().all(|owned_connection| {
-                owned_connection.owner_id != Some(current_user_business_id)
-            }) && graph
+        let owns_nothing = graph
+            .connections
+            .iter()
+            .all(|owned_connection| owned_connection.owner_id != Some(current_player_id))
+            && graph
                 .cities
                 .iter()
                 .flat_map(|city| city.owned_buildings.iter())
-                .all(|owned_building| owned_building.owner_id != Some(current_user_business_id));
+                .all(|owned_building| owned_building.owner_id != Some(current_player_id));
 
         let mut city_positions = HashMap::<usize, (f32, f32)>::new();
         for (city_id, city) in graph.cities.iter().enumerate() {
@@ -153,11 +164,7 @@ async fn main() {
                 DrawRectangleParams {
                     rotation: -angle,
                     offset: Vec2::new(0.5, 0.0),
-                    color: if owned_connection.owner_id == Some(current_user_business_id) {
-                        BLUE
-                    } else {
-                        GRAY
-                    },
+                    color: owned_connection.owner_id.map_or(GRAY, get_player_color),
                     ..Default::default()
                 },
             );
@@ -206,11 +213,7 @@ async fn main() {
                     building_pos.x,
                     building_pos.y,
                     building_radius,
-                    if owned_building.owner_id == Some(current_user_business_id) {
-                        BLUE
-                    } else {
-                        GRAY
-                    },
+                    owned_building.owner_id.map_or(GRAY, get_player_color),
                 );
                 if !cursor_inside_asset_ui && (mouse_pos - building_pos).length() < building_radius
                 {
@@ -225,7 +228,9 @@ async fn main() {
 
         let x_ = MARGIN;
         let mut y_ = MARGIN;
-        for (material, quantity_info) in graph.get_resource_stock(current_user_business_id) {
+        draw_button(x_, y_, 100.0, MARGIN, get_player_color(current_player_id));
+        y_ += MARGIN + MARGIN;
+        for (material, quantity_info) in graph.get_resource_stock(current_player_id) {
             draw_texture_ex(
                 textures.get(&material.get_texture_id()).unwrap(),
                 x_,
@@ -251,14 +256,18 @@ async fn main() {
             );
             y_ += ICON_SIZE + MARGIN;
         }
-        if ButtonState::Pressed == draw_next_turn_button(screen_width() - 200.0, 200.0).0 {
-            graph.update_business_resources(current_user_business_id);
+        if ButtonState::Pressed == draw_next_turn_button(screen_width() - 200.0, MARGIN).0 {
+            current_player_id += 1;
+            if graph.businesses.get(current_player_id).is_none() {
+                current_player_id = 0;
+            }
+            graph.update_business_resources(current_player_id);
         }
 
         if let Some(open_asset_ui) = open_asset_ui_opt.as_mut() {
-            match open_asset_ui.asset {
+            open_asset_ui.size = Some(match open_asset_ui.asset {
                 Asset::Building((city_id, building_id)) => {
-                    let resource_stock = graph.get_resource_stock(current_user_business_id);
+                    let resource_stock = graph.get_resource_stock(current_player_id);
                     let building = graph
                         .cities
                         .get_mut(city_id)
@@ -270,17 +279,17 @@ async fn main() {
                     let x = open_asset_ui.position.x;
                     let y = open_asset_ui.position.y;
 
-                    open_asset_ui.size = Some(match building.owner_id {
-                        Some(id) if id == current_user_business_id => {
-                            draw_recipes_panel(x, y, building, &resource_stock, &textures)
+                    match building.owner_id {
+                        Some(id) if id == current_player_id => {
+                            draw_recipes_panel(x, y, building, &resource_stock, &textures, true)
                         }
-                        Some(other_user_business_id) => {
-                            todo!()
+                        Some(other_id) => {
+                            draw_message_box_ui(x, y, format!("Owned by {}", other_id).as_str())
                         }
                         None => {
                             let can_buy = owns_nothing
                                 || graph.connections.iter().any(|owned_connection| {
-                                    owned_connection.owner_id == Some(current_user_business_id)
+                                    owned_connection.owner_id == Some(current_player_id)
                                         && owned_connection.city_ids.contains(&city_id)
                                 });
 
@@ -288,10 +297,10 @@ async fn main() {
                                 true => {
                                     let (buy_ui_state, size) = draw_buy_ui(x, y);
                                     if buy_ui_state == ButtonState::Pressed {
-                                        building.owner_id = Some(current_user_business_id);
+                                        building.owner_id = Some(current_player_id);
                                         *graph
                                             .businesses
-                                            .get_mut(current_user_business_id)
+                                            .get_mut(current_player_id)
                                             .unwrap()
                                             .resources
                                             .get_mut(&backend::Material::Money)
@@ -303,6 +312,7 @@ async fn main() {
                                         building,
                                         &resource_stock,
                                         &textures,
+                                        false,
                                     ) + Vec2::new(0.0, size.y)
                                 }
                                 false => {
@@ -315,11 +325,12 @@ async fn main() {
                                         building,
                                         &resource_stock,
                                         &textures,
+                                        false,
                                     ) + Vec2::new(0.0, size.y)
                                 }
                             }
                         }
-                    })
+                    }
                 }
                 Asset::Connection(connection_id) => {
                     let owned_connection = graph.connections.get(connection_id).unwrap();
@@ -336,17 +347,16 @@ async fn main() {
                     let y = (start_y + end_y) / 2.0;
 
                     match owned_connection.owner_id {
-                        Some(id) if id == current_user_business_id => {
-                            let size = draw_message_box_ui(x, y, "Maintenance cost: 0");
-                            open_asset_ui.size = Some(size);
+                        Some(id) if id == current_player_id => {
+                            draw_message_box_ui(x, y, "Maintenance cost: 0")
                         }
-                        Some(other_user_business_id) => {
-                            todo!()
+                        Some(other_id) => {
+                            draw_message_box_ui(x, y, format!("Owned by {}", other_id).as_str())
                         }
                         None => {
                             let can_buy =
                                 graph.connections.iter().any(|owned_connection| {
-                                    owned_connection.owner_id == Some(current_user_business_id)
+                                    owned_connection.owner_id == Some(current_player_id)
                                         && owned_connection.city_ids.iter().any(|city_id| {
                                             graph
                                                 .connections
@@ -357,7 +367,7 @@ async fn main() {
                                         })
                                 }) || graph.cities.iter().enumerate().any(|(city_it_id, city)| {
                                     city.owned_buildings.iter().any(|owned_building| {
-                                        owned_building.owner_id == Some(current_user_business_id)
+                                        owned_building.owner_id == Some(current_player_id)
                                             && owned_connection.city_ids.iter().any(|city_id| {
                                                 graph
                                                     .connections
@@ -376,26 +386,25 @@ async fn main() {
                                     if clicked == ButtonState::Pressed {
                                         let owned_connection =
                                             graph.connections.get_mut(connection_id).unwrap();
-                                        owned_connection.owner_id = Some(current_user_business_id);
+                                        owned_connection.owner_id = Some(current_player_id);
                                         *graph
                                             .businesses
-                                            .get_mut(current_user_business_id)
+                                            .get_mut(current_player_id)
                                             .unwrap()
                                             .resources
                                             .get_mut(&backend::Material::Money)
                                             .unwrap() -= owned_connection.acquisition_cost;
                                     }
+                                    size
                                 }
                                 false => {
-                                    let size =
-                                        draw_message_box_ui(x, y, "Not connected\nto your network");
-                                    open_asset_ui.size = Some(size);
+                                    draw_message_box_ui(x, y, "Not connected\nto your network")
                                 }
                             }
                         }
                     }
                 }
-            }
+            })
         }
         if mouse_button_pressed && !cursor_inside_asset_ui {
             open_asset_ui_opt = None;

@@ -79,6 +79,7 @@ pub fn draw_recipes_panel(
     building: &mut OwnedBuilding,
     resource_stock: &BTreeMap<Material, QuantityInfo>,
     textures: &HashMap<String, Texture2D>,
+    editable: bool,
 ) -> Vec2 {
     let mut x_ = x + MARGIN;
     let mut y_ = y;
@@ -100,9 +101,10 @@ pub fn draw_recipes_panel(
             texture_ids.insert(index, material.get_texture_id());
         }
 
-        let click_up = ButtonState::Pressed == draw_button(x_, y_, 50.0, 25.0, BLACK).0;
-        let click_down = ButtonState::Pressed
-            == draw_button(x_, y_ + TEXTURE_SIZE - MARGIN - 25.0, 50.0, 25.0, BLACK).0;
+        let click_up = editable && ButtonState::Pressed == draw_button(x_, y_, 50.0, 25.0, BLACK).0;
+        let click_down = editable
+            && ButtonState::Pressed
+                == draw_button(x_, y_ + TEXTURE_SIZE - MARGIN - 25.0, 50.0, 25.0, BLACK).0;
         let requested_increment = match (click_up, click_down, *scale == 0, *scale == *max_scale) {
             (true, false, _, false) => 1,
             (false, true, false, _) => -1,
