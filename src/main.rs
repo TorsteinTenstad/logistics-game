@@ -239,7 +239,7 @@ async fn main() {
 
             draw_text(
                 format!(
-                    "{}/{}",
+                    "{}({:+})",
                     quantity_info.quantity,
                     quantity_info.gross_in - quantity_info.gross_out,
                 )

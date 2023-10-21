@@ -90,6 +90,7 @@ pub fn draw_recipes_panel(
     for ScaledValidRecipe {
         valid_recipe,
         scale,
+        max_scale,
     } in building.production_scale.iter_mut()
     {
         let mut texture_ids: Vec<String> = vec!["right_arrow".to_string()];
@@ -102,9 +103,9 @@ pub fn draw_recipes_panel(
         let click_up = ButtonState::Pressed == draw_button(x_, y_, 50.0, 25.0, BLACK).0;
         let click_down = ButtonState::Pressed
             == draw_button(x_, y_ + TEXTURE_SIZE - MARGIN - 25.0, 50.0, 25.0, BLACK).0;
-        let requested_increment = match (click_up, click_down, *scale == 0) {
-            (true, false, _) => 1,
-            (false, true, false) => -1,
+        let requested_increment = match (click_up, click_down, *scale == 0, *scale == *max_scale) {
+            (true, false, _, false) => 1,
+            (false, true, false, _) => -1,
             _ => 0,
         };
         let can_increment = requested_increment != 0
@@ -126,8 +127,8 @@ pub fn draw_recipes_panel(
             *scale += requested_increment;
         }
         draw_text(
-            format!("{}", scale).as_str(),
-            x_ + 25.0,
+            format!("{}/{}", scale, max_scale).as_str(),
+            x_,
             y_ + TEXTURE_SIZE / 2.0,
             32.0,
             WHITE,

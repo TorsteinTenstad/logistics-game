@@ -92,6 +92,7 @@ impl ValidRecipe {
 pub struct ScaledValidRecipe {
     pub valid_recipe: ValidRecipe,
     pub scale: i32,
+    pub max_scale: i32,
 }
 
 #[derive(Clone, Copy)]
@@ -146,6 +147,7 @@ impl OwnedBuilding {
                 .map(|valid_recipe| ScaledValidRecipe {
                     valid_recipe: valid_recipe,
                     scale: 0,
+                    max_scale: 5,
                 })
                 .collect(),
             owner_id: None,
@@ -207,6 +209,7 @@ impl Graph {
         for ScaledValidRecipe {
             valid_recipe,
             scale,
+            max_scale,
         } in self
             .cities
             .iter()
