@@ -5,6 +5,8 @@ mod backend;
 mod ui;
 use backend::{BuildingType, Business, City, Graph, OwnedBuilding, OwnedConnection};
 use ui::*;
+extern crate rand;
+use rand::Rng;
 
 enum Asset {
     Building((usize, usize)),
@@ -28,62 +30,52 @@ fn get_player_color(player_id: usize) -> Color {
 
 #[macroquad::main("logistics-game")]
 async fn main() {
+    let mut rng = rand::thread_rng();
     let mut graph = Graph {
         cities: vec![
-            City {
-                x: 260.0,
-                y: 60.0,
-                owned_buildings: vec![OwnedBuilding::new(BuildingType::Market)],
-            },
-            City {
-                x: 500.0,
-                y: 100.0,
-                owned_buildings: vec![OwnedBuilding::new(BuildingType::ComputerFactory)],
-            },
-            City {
-                x: 280.0,
-                y: 300.0,
-                owned_buildings: vec![
-                    OwnedBuilding::new(BuildingType::SandPlant),
-                    OwnedBuilding::new(BuildingType::Mine),
-                ],
-            },
-            City {
-                x: 600.0,
-                y: 280.0,
-                owned_buildings: vec![
-                    OwnedBuilding::new(BuildingType::MetalRefinery),
-                    OwnedBuilding::new(BuildingType::WoodWorkingFactory),
-                    OwnedBuilding::new(BuildingType::ComputerFactory),
-                ],
-            },
-            City {
-                x: 400.0,
-                y: 380.0,
-                owned_buildings: vec![OwnedBuilding::new(BuildingType::ComputerFactory)],
-            },
+            City::new_with_random_buildings(&mut rng, 200.0, 60.0),
+            City::new_with_random_buildings(&mut rng, 400.0, 60.0),
+            City::new_with_random_buildings(&mut rng, 600.0, 60.0),
+            City::new_with_random_buildings(&mut rng, 800.0, 60.0),
+            City::new_with_random_buildings(&mut rng, 1000.0, 60.0),
+            City::new_with_random_buildings(&mut rng, 300.0, 220.0),
+            City::new_with_random_buildings(&mut rng, 500.0, 220.0),
+            City::new_with_random_buildings(&mut rng, 700.0, 220.0),
+            City::new_with_random_buildings(&mut rng, 900.0, 220.0),
+            City::new_with_random_buildings(&mut rng, 1100.0, 220.0),
+            City::new_with_random_buildings(&mut rng, 200.0, 380.0),
+            City::new_with_random_buildings(&mut rng, 400.0, 380.0),
+            City::new_with_random_buildings(&mut rng, 600.0, 380.0),
+            City::new_with_random_buildings(&mut rng, 800.0, 380.0),
+            City::new_with_random_buildings(&mut rng, 1000.0, 380.0),
+            City::new_with_random_buildings(&mut rng, 300.0, 540.0),
+            City::new_with_random_buildings(&mut rng, 500.0, 540.0),
+            City::new_with_random_buildings(&mut rng, 700.0, 540.0),
+            City::new_with_random_buildings(&mut rng, 900.0, 540.0),
+            City::new_with_random_buildings(&mut rng, 1100.0, 540.0),
         ],
         connections: vec![
-            OwnedConnection {
-                city_ids: vec![0, 1],
-                owner_id: None,
-                acquisition_cost: 50,
-            },
-            OwnedConnection {
-                city_ids: vec![0, 2],
-                owner_id: None,
-                acquisition_cost: 50,
-            },
-            OwnedConnection {
-                city_ids: vec![0, 3],
-                owner_id: None,
-                acquisition_cost: 50,
-            },
-            OwnedConnection {
-                city_ids: vec![2, 4],
-                owner_id: None,
-                acquisition_cost: 50,
-            },
+            OwnedConnection::new(0, 1),
+            OwnedConnection::new(0, 10),
+            OwnedConnection::new(1, 2),
+            OwnedConnection::new(1, 6),
+            OwnedConnection::new(3, 4),
+            OwnedConnection::new(3, 7),
+            OwnedConnection::new(5, 11),
+            OwnedConnection::new(6, 12),
+            OwnedConnection::new(7, 12),
+            OwnedConnection::new(7, 13),
+            OwnedConnection::new(8, 9),
+            OwnedConnection::new(8, 13),
+            OwnedConnection::new(10, 15),
+            OwnedConnection::new(11, 12),
+            OwnedConnection::new(12, 17),
+            OwnedConnection::new(13, 14),
+            OwnedConnection::new(13, 17),
+            OwnedConnection::new(14, 18),
+            OwnedConnection::new(14, 19),
+            OwnedConnection::new(15, 16),
+            OwnedConnection::new(18, 19),
         ],
         businesses: vec![Business::new(), Business::new()],
     };

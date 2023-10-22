@@ -1,3 +1,4 @@
+use rand::{rngs::ThreadRng, Rng};
 use std::collections::BTreeMap;
 
 #[derive(PartialEq, Eq, Hash, PartialOrd, Ord, Clone)]
@@ -52,6 +53,7 @@ pub enum ValidRecipe {
     SandCollecting,
     ChipProduction,
     LogImport,
+    EnergyImport,
     FurnitureExport,
     GoldExport,
     ComputerExport,
@@ -66,21 +68,22 @@ impl ValidRecipe {
                     (Material::Wire, -1),
                     (Material::Computer, 1),
                 ],
-                Self::PlankProduction => vec![(Material::Log, -1), (Material::Plank, 1)],
-                Self::FurnitureProduction => vec![(Material::Plank, -1), (Material::Furniture, 1)],
+                Self::PlankProduction => vec![(Material::Log, -1), (Material::Plank, 4)],
+                Self::FurnitureProduction => vec![(Material::Plank, -4), (Material::Furniture, 1)],
                 Self::OreMining => vec![(Material::Energy, -1), (Material::Ore, 1)],
                 Self::MetalRefining => vec![
-                    (Material::Ore, -1),
+                    (Material::Ore, -4),
                     (Material::Wire, 1),
                     (Material::Gold, 1),
                 ],
-                Self::SandCollecting => vec![(Material::Energy, -1), (Material::Sand, 3)],
+                Self::SandCollecting => vec![(Material::Energy, -1), (Material::Sand, 4)],
                 Self::ChipProduction => vec![
                     (Material::Energy, -1),
                     (Material::Sand, -1),
                     (Material::Chip, 1),
                 ],
                 Self::LogImport => vec![(Material::Money, -10), (Material::Log, 1)],
+                Self::EnergyImport => vec![(Material::Money, -10), (Material::Energy, 1)],
                 Self::FurnitureExport => vec![(Material::Furniture, -1), (Material::Money, 100)],
                 Self::GoldExport => vec![(Material::Gold, -1), (Material::Money, 100)],
                 Self::ComputerExport => vec![(Material::Computer, -1), (Material::Money, 100)],
@@ -98,6 +101,7 @@ pub struct ScaledValidRecipe {
 #[derive(Clone, Copy)]
 pub enum BuildingType {
     Market,
+    EnergyMarket,
     WoodWorkingFactory,
     ComputerFactory,
     SandPlant,
@@ -108,6 +112,9 @@ pub enum BuildingType {
 impl BuildingType {
     fn get_valid_recipes(&self) -> Vec<ValidRecipe> {
         match self {
+            Self::EnergyMarket => {
+                vec![ValidRecipe::EnergyImport]
+            }
             Self::Market => {
                 vec![
                     ValidRecipe::LogImport,
@@ -162,10 +169,43 @@ pub struct City {
     pub owned_buildings: Vec<OwnedBuilding>,
 }
 
+impl City {
+    pub fn new_with_random_buildings(rng: &mut ThreadRng, x: f32, y: f32) -> Self {
+        Self {
+            x: x,
+            y: y,
+            owned_buildings: (0..rng.gen_range(1..4))
+                .into_iter()
+                .map(|_i| {
+                    OwnedBuilding::new(match rng.gen_range(0..7) {
+                        0 => BuildingType::Market,
+                        1 => BuildingType::WoodWorkingFactory,
+                        2 => BuildingType::ComputerFactory,
+                        3 => BuildingType::SandPlant,
+                        4 => BuildingType::Mine,
+                        5 => BuildingType::EnergyMarket,
+                        _ => BuildingType::MetalRefinery,
+                    })
+                })
+                .collect(),
+        }
+    }
+}
+
 pub struct OwnedConnection {
     pub city_ids: Vec<usize>,
     pub owner_id: Option<usize>,
     pub acquisition_cost: i32,
+}
+
+impl OwnedConnection {
+    pub fn new(city_id_a: usize, city_id_b: usize) -> Self {
+        Self {
+            city_ids: vec![city_id_a, city_id_b],
+            owner_id: None,
+            acquisition_cost: 20,
+        }
+    }
 }
 
 #[derive(Default)]
@@ -183,7 +223,7 @@ pub struct Business {
 impl Business {
     pub fn new() -> Self {
         Self {
-            resources: BTreeMap::from([(Material::Money, 1000)]),
+            resources: BTreeMap::from([(Material::Money, 250)]),
         }
     }
 }
