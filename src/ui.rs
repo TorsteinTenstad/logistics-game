@@ -35,14 +35,20 @@ pub fn draw_button(x: f32, y: f32, w: f32, h: f32, color: Color) -> (ButtonState
     )
 }
 
-pub fn draw_buy_ui(x: f32, y: f32) -> (ButtonState, Vec2) {
+pub fn draw_buy_ui(x: f32, y: f32, amount: i32) -> (ButtonState, Vec2) {
     let w = 350.0 + 2.0 * MARGIN;
     let h = 40.0 + 2.0 * MARGIN;
     let x_ = x + MARGIN;
     let y_ = y + MARGIN;
     draw_rectangle(x, y, w, h, UI_BACKGROUND_COLOR);
     let (clicked, _button_size) = draw_button(x_, y_, w - 2.0 * MARGIN, h - 2.0 * MARGIN, RED);
-    draw_text("Buy", x_ + MARGIN, y + h / 2.0, 32.0, WHITE);
+    draw_text(
+        format!("Buy | {}$", amount).as_str(),
+        x_ + MARGIN,
+        y + h / 2.0,
+        32.0,
+        WHITE,
+    );
     (clicked, Vec2::new(w, h))
 }
 
@@ -94,11 +100,11 @@ pub fn draw_recipes_panel(
         max_scale,
     } in building.production_scale.iter_mut()
     {
-        let mut texture_ids: Vec<String> = vec!["right_arrow".to_string()];
+        let mut texture_ids: Vec<(String, i32)> = vec![("right_arrow".to_string(), 1)];
 
         for (material, quantity) in valid_recipe.get_recipe().materials.iter() {
             let index = if *quantity > 0 { texture_ids.len() } else { 0 };
-            texture_ids.insert(index, material.get_texture_id());
+            texture_ids.insert(index, (material.get_texture_id(), quantity.abs()));
         }
 
         let click_up = editable && ButtonState::Pressed == draw_button(x_, y_, 50.0, 25.0, BLACK).0;
@@ -137,7 +143,7 @@ pub fn draw_recipes_panel(
         );
         x_ += 50.0 + MARGIN;
 
-        for texture_id in texture_ids {
+        for (texture_id, quantity) in texture_ids {
             let texture = textures.get(&texture_id).unwrap();
             draw_texture_ex(
                 &texture,
@@ -149,6 +155,15 @@ pub fn draw_recipes_panel(
                     ..Default::default()
                 },
             );
+            if quantity > 1 {
+                draw_text(
+                    format!("{}", quantity).as_str(),
+                    x_,
+                    y_ + TEXTURE_SIZE,
+                    24.0,
+                    WHITE,
+                );
+            }
             x_ += TEXTURE_SIZE + MARGIN;
         }
         x_ = x + MARGIN;

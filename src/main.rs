@@ -295,7 +295,8 @@ async fn main() {
 
                             match can_buy {
                                 true => {
-                                    let (buy_ui_state, size) = draw_buy_ui(x, y);
+                                    let (buy_ui_state, size) =
+                                        draw_buy_ui(x, y, building.acquisition_cost);
                                     if buy_ui_state == ButtonState::Pressed {
                                         building.owner_id = Some(current_player_id);
                                         *graph
@@ -381,7 +382,8 @@ async fn main() {
 
                             match can_buy {
                                 true => {
-                                    let (clicked, size) = draw_buy_ui(x, y);
+                                    let (clicked, size) =
+                                        draw_buy_ui(x, y, owned_connection.acquisition_cost);
                                     open_asset_ui.size = Some(size);
                                     if clicked == ButtonState::Pressed {
                                         let owned_connection =
