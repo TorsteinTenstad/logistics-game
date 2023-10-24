@@ -8,7 +8,7 @@ pub const UI_BACKGROUND_COLOR: macroquad::color::Color = Color {
     b: 0.4,
     a: 1.0,
 };
-pub const TEXTURE_SIZE: f32 = 100.0;
+pub const TEXTURE_SIZE: f32 = 80.0;
 pub const ICON_SIZE: f32 = 50.0;
 pub const MARGIN: f32 = 10.0;
 
@@ -121,15 +121,18 @@ pub fn draw_recipes_panel(
                 .get_recipe()
                 .materials
                 .iter()
-                .all(|(material, quantity)| match resource_stock.get(material) {
-                    Some(quantity_info) => {
-                        quantity_info.quantity
-                            + requested_increment * quantity
-                            + quantity_info.gross_in
-                            - quantity_info.gross_out
-                            >= 0
-                    }
-                    None => requested_increment * *quantity >= 0,
+                .all(|(material, quantity)| {
+                    requested_increment * quantity > 0
+                        || match resource_stock.get(material) {
+                            Some(quantity_info) => {
+                                quantity_info.quantity
+                                    + requested_increment * quantity
+                                    + quantity_info.gross_in
+                                    - quantity_info.gross_out
+                                    >= 0
+                            }
+                            None => requested_increment * *quantity >= 0,
+                        }
                 });
         if can_increment {
             *scale += requested_increment;

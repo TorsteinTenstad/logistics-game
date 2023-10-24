@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 mod backend;
 mod ui;
-use backend::{BuildingType, Business, City, Graph, OwnedBuilding, OwnedConnection};
+use backend::{BuildingType, Business, City, Graph, Material, OwnedConnection};
 use ui::*;
 extern crate rand;
 use rand::Rng;
@@ -56,25 +56,34 @@ async fn main() {
         ],
         connections: vec![
             OwnedConnection::new(0, 1),
+            OwnedConnection::new(0, 5),
             OwnedConnection::new(0, 10),
             OwnedConnection::new(1, 2),
             OwnedConnection::new(1, 6),
             OwnedConnection::new(3, 4),
             OwnedConnection::new(3, 7),
+            OwnedConnection::new(4, 8),
+            OwnedConnection::new(4, 9),
             OwnedConnection::new(5, 11),
+            OwnedConnection::new(6, 7),
             OwnedConnection::new(6, 12),
+            OwnedConnection::new(6, 16),
+            OwnedConnection::new(7, 8),
             OwnedConnection::new(7, 12),
             OwnedConnection::new(7, 13),
             OwnedConnection::new(8, 9),
             OwnedConnection::new(8, 13),
+            OwnedConnection::new(9, 19),
             OwnedConnection::new(10, 15),
-            OwnedConnection::new(11, 12),
+            OwnedConnection::new(11, 16),
+            OwnedConnection::new(12, 16),
             OwnedConnection::new(12, 17),
             OwnedConnection::new(13, 14),
             OwnedConnection::new(13, 17),
             OwnedConnection::new(14, 18),
             OwnedConnection::new(14, 19),
             OwnedConnection::new(15, 16),
+            OwnedConnection::new(17, 18),
             OwnedConnection::new(18, 19),
         ],
         businesses: vec![Business::new(), Business::new()],
@@ -98,6 +107,10 @@ async fn main() {
         "rocks",
         "sand",
         "energy",
+        "raw_oil",
+        "oil",
+        "glass",
+        "plastic",
     ] {
         textures.insert(
             texture_id.to_string(),
@@ -207,6 +220,30 @@ async fn main() {
                     building_radius,
                     owned_building.owner_id.map_or(GRAY, get_player_color),
                 );
+                let building_marker =
+                    if owned_building
+                        .production_scale
+                        .iter()
+                        .any(|scaled_valid_recipe| {
+                            scaled_valid_recipe
+                                .valid_recipe
+                                .get_recipe()
+                                .materials
+                                .iter()
+                                .any(|(material, _)| material == &Material::Money)
+                        })
+                    {
+                        "M"
+                    } else {
+                        ""
+                    };
+                draw_text(
+                    building_marker,
+                    building_pos.x - 0.5 * building_radius,
+                    building_pos.y + 0.5 * building_radius,
+                    24.0,
+                    BLACK,
+                );
                 if !cursor_inside_asset_ui && (mouse_pos - building_pos).length() < building_radius
                 {
                     open_asset_ui_opt = Some(AssetUI {
@@ -256,10 +293,17 @@ async fn main() {
             graph.update_business_resources(current_player_id);
         }
 
+        let resource_stock = graph.get_resource_stock(current_player_id);
         if let Some(open_asset_ui) = open_asset_ui_opt.as_mut() {
             open_asset_ui.size = Some(match open_asset_ui.asset {
                 Asset::Building((city_id, building_id)) => {
-                    let resource_stock = graph.get_resource_stock(current_player_id);
+                    let owns_building_in_city = graph
+                        .cities
+                        .get(city_id)
+                        .unwrap()
+                        .owned_buildings
+                        .iter()
+                        .any(|owned_building| owned_building.owner_id == Some(current_player_id));
                     let building = graph
                         .cities
                         .get_mut(city_id)
@@ -283,13 +327,17 @@ async fn main() {
                                 || graph.connections.iter().any(|owned_connection| {
                                     owned_connection.owner_id == Some(current_player_id)
                                         && owned_connection.city_ids.contains(&city_id)
-                                });
+                                })
+                                || owns_building_in_city;
 
                             match can_buy {
                                 true => {
                                     let (buy_ui_state, size) =
                                         draw_buy_ui(x, y, building.acquisition_cost);
-                                    if buy_ui_state == ButtonState::Pressed {
+                                    if resource_stock.get(&Material::Money).unwrap().quantity
+                                        >= building.acquisition_cost
+                                        && buy_ui_state == ButtonState::Pressed
+                                    {
                                         building.owner_id = Some(current_player_id);
                                         *graph
                                             .businesses
@@ -377,7 +425,10 @@ async fn main() {
                                     let (clicked, size) =
                                         draw_buy_ui(x, y, owned_connection.acquisition_cost);
                                     open_asset_ui.size = Some(size);
-                                    if clicked == ButtonState::Pressed {
+                                    if resource_stock.get(&Material::Money).unwrap().quantity
+                                        >= owned_connection.acquisition_cost
+                                        && clicked == ButtonState::Pressed
+                                    {
                                         let owned_connection =
                                             graph.connections.get_mut(connection_id).unwrap();
                                         owned_connection.owner_id = Some(current_player_id);
