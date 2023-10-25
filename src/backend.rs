@@ -291,8 +291,8 @@ impl TerrainType {
                 BuildingType::OilRig,
             ],
             Self::Hills => vec![BuildingType::OilRig],
-            Self::Mountain => vec![],
-            Self::Urban => vec![BuildingType::LocalMarket],
+            Self::Mountain => vec![BuildingType::Mine],
+            Self::Urban => vec![BuildingType::LocalMarket, BuildingType::WoodWorkingMarket],
             Self::Industrial => vec![
                 BuildingType::EnergyMarket,
                 BuildingType::FurnitureFactory,
@@ -302,7 +302,6 @@ impl TerrainType {
                 BuildingType::Sawmill,
                 BuildingType::PlasticFactory,
                 BuildingType::OilEnergyPlant,
-                BuildingType::WoodWorkingMarket,
             ],
             Self::WaterShallow => vec![],
             Self::WaterDeep => vec![],

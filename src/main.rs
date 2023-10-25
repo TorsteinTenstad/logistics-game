@@ -1,8 +1,13 @@
-use std::collections::{BTreeMap, HashMap};
+use std::{
+    collections::{BTreeMap, HashMap},
+    default,
+};
 
 use macroquad::prelude::*;
 mod backend;
-use backend::{Business, GameData, QuantityInfo, Resource, ScaledValidRecipe, TerrainType, Tile};
+use backend::{
+    BuildingType, Business, GameData, QuantityInfo, Resource, ScaledValidRecipe, TerrainType, Tile,
+};
 
 use crate::backend::Building;
 
@@ -17,7 +22,7 @@ impl TerrainType {
                     Self::Hills => "AD7135",
                     Self::Mountain => "5F4632",
                     Self::Urban => "7D847C",
-                    Self::Industrial => "45818E",
+                    Self::Industrial => "CCEBC5",
                     Self::WaterShallow => "76A5AF",
                     Self::WaterDeep => "45818E",
                 },
@@ -28,7 +33,31 @@ impl TerrainType {
     }
 }
 
-const HEX_RADIUS: f32 = 50.0;
+impl BuildingType {
+    fn get_texture_id(&self) -> &str {
+        match self {
+            Self::LocalMarket => "market",
+            Self::EnergyMarket => "market",
+            Self::Sawmill => "saw",
+            Self::FurnitureFactory => "factory",
+            Self::WoodWorkingMarket => "market",
+            Self::ComputerFactory => "factory",
+            Self::SandPlant => "digger",
+            Self::Mine => "minecart",
+            Self::MetalRefinery => "factory",
+            Self::GlassFactory => "factory",
+            Self::OilRig => "oil_rig",
+            Self::OilRefinery => "oil_refinery",
+            Self::PlasticFactory => "factory",
+            Self::OilEnergyPlant => "fossil_plant",
+            Self::TreeFarm => "forrest_farm",
+            Self::SolarEnergyFarm => "solar_plant",
+            Self::WindEnergyFarm => "wind_plant",
+        }
+    }
+}
+
+const HEX_RADIUS: f32 = 80.0;
 const COS_30: f32 = 0.86602540378;
 const ROAD_W: f32 = 2.0 * (1.0 - COS_30) * HEX_RADIUS;
 const ICON_SIZE: f32 = 40.0;
@@ -36,12 +65,18 @@ pub const MARGIN: f32 = 10.0;
 pub const TEXTURE_SIZE: f32 = 60.0;
 
 fn get_player_color(player_id: usize) -> Color {
-    match player_id {
-        0 => BLUE,
-        1 => GREEN,
-        2 => YELLOW,
-        _ => todo!(),
-    }
+    Color::from_hex(
+        u32::from_str_radix(
+            match player_id {
+                0 => "B3CDE3",
+                1 => "FBB4AE",
+                2 => "CCEBC5",
+                _ => "",
+            },
+            16,
+        )
+        .unwrap(),
+    )
 }
 
 pub fn draw_button(x: f32, y: f32, w: f32, h: f32, color: Color) -> bool {
@@ -151,7 +186,7 @@ pub fn draw_recipes_panel(
 
 fn hex_idx_to_pos(x: i32, y: i32) -> Vec2 {
     Vec2::new(
-        650.0 + 2.0 * HEX_RADIUS * x as f32 + HEX_RADIUS * (y % 2) as f32,
+        680.0 + 2.0 * HEX_RADIUS * x as f32 + HEX_RADIUS * (y % 2) as f32,
         100.0 + f32::sqrt(3.0) * HEX_RADIUS * y as f32,
     )
 }
@@ -246,6 +281,21 @@ async fn main() {
         "oil",
         "glass",
         "plastic",
+        "saw",
+        "factory",
+        "market",
+        "factory",
+        "digger",
+        "minecart",
+        "factory",
+        "factory",
+        "oil_rig",
+        "oil_refinery",
+        "factory",
+        "fossil_plant",
+        "forrest_farm",
+        "solar_plant",
+        "wind_plant",
     ] {
         textures.insert(
             texture_id.to_string(),
@@ -257,17 +307,13 @@ async fn main() {
 
     #[rustfmt::skip]
     let mut game_data=GameData{tiles: [
-        [TerrainType::Desert, TerrainType::WaterShallow, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills],
-        [TerrainType::Desert, TerrainType::WaterShallow, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills],
-        [TerrainType::Desert, TerrainType::WaterShallow, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills],
-        [TerrainType::Desert, TerrainType::WaterShallow, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills],
-        [TerrainType::Desert, TerrainType::WaterShallow, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills],
-        [TerrainType::Forrest, TerrainType::Forrest, TerrainType::Forrest, TerrainType::Urban, TerrainType::Urban, TerrainType::Industrial, TerrainType::Industrial, TerrainType::Grassland, TerrainType::Grassland, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep],
-        [TerrainType::Forrest, TerrainType::Forrest, TerrainType::Forrest, TerrainType::Urban, TerrainType::Urban, TerrainType::Industrial, TerrainType::Industrial, TerrainType::Grassland, TerrainType::Grassland, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep],
-        [TerrainType::Forrest, TerrainType::Forrest, TerrainType::Forrest, TerrainType::Urban, TerrainType::Urban, TerrainType::Industrial, TerrainType::Industrial, TerrainType::Grassland, TerrainType::Grassland, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep],
-        [TerrainType::Forrest, TerrainType::Forrest, TerrainType::Forrest, TerrainType::Urban, TerrainType::Urban, TerrainType::Industrial, TerrainType::Industrial, TerrainType::Grassland, TerrainType::Grassland, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep],
-        [TerrainType::Forrest, TerrainType::Forrest, TerrainType::Forrest, TerrainType::Urban, TerrainType::Urban, TerrainType::Industrial, TerrainType::Industrial, TerrainType::Grassland, TerrainType::Grassland, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep],
-        [TerrainType::Forrest, TerrainType::Forrest, TerrainType::Forrest, TerrainType::Urban, TerrainType::Urban, TerrainType::Industrial, TerrainType::Industrial, TerrainType::Grassland, TerrainType::Grassland, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep],
+        [TerrainType::Hills, TerrainType::Hills, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain],
+        [TerrainType::Desert, TerrainType::Hills, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Hills, TerrainType::Hills],
+        [TerrainType::Desert, TerrainType::Hills, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Hills, TerrainType::Industrial, TerrainType::Industrial],
+        [TerrainType::Forrest, TerrainType::Forrest, TerrainType::Forrest, TerrainType::Urban, TerrainType::Urban, TerrainType::Industrial, TerrainType::Industrial],
+        [TerrainType::Mountain, TerrainType::Mountain, TerrainType::Forrest, TerrainType::Urban, TerrainType::Urban, TerrainType::Urban, TerrainType::Industrial],
+        [TerrainType::Mountain, TerrainType::Industrial, TerrainType::Industrial, TerrainType::Forrest, TerrainType::Urban, TerrainType::Urban, TerrainType::WaterShallow],
+        [TerrainType::Mountain, TerrainType::Industrial, TerrainType::Industrial, TerrainType::Forrest, TerrainType::Forrest, TerrainType::WaterShallow, TerrainType::WaterShallow],
     ].iter().map(|row| row.iter().map(|terrain_type| Tile::new(&terrain_type)).collect::<Vec<Tile>>()).collect::<Vec<Vec<Tile>>>(), businesses: vec![Business::new(),Business::new()]};
 
     let mut selected_hex_opt: Option<(usize, usize)> = None;
@@ -298,13 +344,30 @@ async fn main() {
                         x: marker_x,
                         y: marker_y,
                     } = hex_idx_to_pos(x, y);
-                    draw_circle(marker_x, marker_y, HEX_RADIUS / 4.0, WHITE);
-                    draw_circle(
-                        marker_x,
-                        marker_y,
-                        HEX_RADIUS / 5.0,
-                        get_player_color(owner_id),
-                    );
+                    if let Some(Building {
+                        building_type,
+                        production_scale: _,
+                    }) = tile.building
+                    {
+                        draw_texture_ex(
+                            textures.get(building_type.get_texture_id()).unwrap(),
+                            marker_x - 1.2 * HEX_RADIUS / 2.0,
+                            marker_y - 1.2 * HEX_RADIUS / 2.0,
+                            get_player_color(owner_id),
+                            DrawTextureParams {
+                                dest_size: Some(Vec2::splat(1.2 * HEX_RADIUS)),
+                                ..Default::default()
+                            },
+                        )
+                    } else {
+                        draw_circle(marker_x, marker_y, HEX_RADIUS / 4.0, WHITE);
+                        draw_circle(
+                            marker_x,
+                            marker_y,
+                            HEX_RADIUS / 5.0,
+                            get_player_color(owner_id),
+                        );
+                    }
                 }
                 if click && hovering {
                     selected_hex_opt = Some((row_index, col_index));
@@ -357,7 +420,7 @@ async fn main() {
             selected_hex_opt = None;
         }
 
-        let resource_stock = game_data.get_resource_stock(current_player_id);
+        let mut resource_stock = game_data.get_resource_stock(current_player_id);
         let PANEL_X = 200.0;
         if let Some((tile_x, tile_y)) = selected_hex_opt {
             let tile = game_data
@@ -366,7 +429,7 @@ async fn main() {
                 .unwrap()
                 .get_mut(tile_y)
                 .unwrap();
-            draw_rectangle(PANEL_X, 0.0, 300.0, screen_height(), GRAY);
+            draw_rectangle(PANEL_X, 0.0, 400.0, screen_height(), GRAY);
             draw_text(
                 format!("{:?}", tile.terrain_type).as_str(),
                 PANEL_X + MARGIN,
@@ -374,19 +437,24 @@ async fn main() {
                 32.0,
                 WHITE,
             );
+            let player_money = resource_stock.get_mut(&Resource::Money).unwrap();
             match tile.owner_id {
                 Some(id) if id == current_player_id => {}
                 Some(id) => {}
                 None => {
+                    let acquisition_cost = tile.get_acquisition_cost();
                     let buy_hovered = draw_button(PANEL_X + MARGIN, 100.0, 150.0, 40.0, RED);
                     draw_text(
-                        format!("Buy, ${}", tile.get_acquisition_cost()).as_str(),
+                        format!("Buy, ${}", acquisition_cost).as_str(),
                         PANEL_X + 2.0 * MARGIN,
                         120.0,
                         28.0,
                         WHITE,
                     );
-                    if buy_hovered && click {
+                    if buy_hovered
+                        && click
+                        && player_money.quantity - player_money.net_out().abs() >= acquisition_cost
+                    {
                         tile.owner_id = Some(current_player_id);
                         *game_data
                             .businesses
@@ -394,15 +462,30 @@ async fn main() {
                             .unwrap()
                             .resources
                             .get_mut(&backend::Resource::Money)
-                            .unwrap() -= tile.get_acquisition_cost();
+                            .unwrap() -= acquisition_cost;
                     }
                 }
             }
             let mut y_ = 200.0;
+            let mut preview_building_type: Option<BuildingType> = None;
             if let Some(building) = tile.building.as_mut() {
-                draw_recipes_panel(PANEL_X, y_, building, &resource_stock, &textures, true);
+                draw_text(
+                    format!("{:?}", building.building_type).as_str(),
+                    PANEL_X + MARGIN,
+                    y_,
+                    32.0,
+                    WHITE,
+                );
+                draw_recipes_panel(
+                    PANEL_X,
+                    y_,
+                    building,
+                    &resource_stock,
+                    &textures,
+                    tile.owner_id == Some(current_player_id),
+                );
             } else {
-                draw_text("Supported buildings:", PANEL_X + MARGIN, y_, 32.0, WHITE);
+                draw_text("Available buildings:", PANEL_X + MARGIN, y_, 32.0, WHITE);
                 y_ += 40.0;
                 for building_type in tile.terrain_type.supported_building_types() {
                     draw_text(
@@ -412,20 +495,47 @@ async fn main() {
                         24.0,
                         WHITE,
                     );
+                    let construction_cost = building_type.get_construction_cost();
                     if tile.owner_id == Some(current_player_id) && tile.building.is_none() {
-                        let hover_build = draw_button(PANEL_X + 200.0, y_ - 20.0, 100.0, 30.0, RED);
+                        let hover_build = draw_button(PANEL_X + 300.0, y_ - 20.0, 100.0, 28.0, RED);
                         draw_text(
-                            format!("Buy, ${}", building_type.get_construction_cost()).as_str(),
-                            PANEL_X + 200.0 + MARGIN,
+                            format!("Buy, ${}", construction_cost).as_str(),
+                            PANEL_X + 300.0 + MARGIN,
                             y_,
-                            24.0,
+                            22.0,
                             WHITE,
                         );
-                        if hover_build && click {
-                            tile.building = Some(Building::new(building_type))
+                        if hover_build
+                            && click
+                            && player_money.quantity - player_money.net_out().abs()
+                                >= construction_cost
+                        {
+                            tile.building = Some(Building::new(building_type));
+                            *game_data
+                                .businesses
+                                .get_mut(current_player_id)
+                                .unwrap()
+                                .resources
+                                .get_mut(&backend::Resource::Money)
+                                .unwrap() -= construction_cost;
                         }
                     }
-                    y_ += 24.0;
+                    let hover_preview = draw_button(PANEL_X + 200.0, y_ - 20.0, 90.0, 28.0, RED);
+                    if hover_preview {
+                        preview_building_type = Some(building_type)
+                    }
+                    draw_text("Preview", PANEL_X + 200.0 + MARGIN, y_, 22.0, WHITE);
+                    y_ += 32.0;
+                }
+                if let Some(building_type) = preview_building_type {
+                    draw_recipes_panel(
+                        PANEL_X,
+                        y_ + MARGIN,
+                        &mut Building::new(building_type),
+                        &resource_stock,
+                        &textures,
+                        false,
+                    );
                 }
             }
         }
