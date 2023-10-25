@@ -1,23 +1,32 @@
 use macroquad::prelude::*;
-use std::collections::HashMap;
-
 mod backend;
-mod ui;
-use backend::{BuildingType, Business, City, Graph, Material, OwnedConnection};
-use ui::*;
-extern crate rand;
-use rand::Rng;
+use backend::{Business, GameData, TerrainType, Tile};
 
-enum Asset {
-    Building((usize, usize)),
-    Connection(usize),
+impl TerrainType {
+    fn get_color(&self) -> Color {
+        Color::from_hex(
+            u32::from_str_radix(
+                match self {
+                    Self::Grassland => "68B75C",
+                    Self::Forrest => "146842",
+                    Self::Desert => "E4C670",
+                    Self::Hills => "AD7135",
+                    Self::Mountain => "5F4632",
+                    Self::Urban => "7D847C",
+                    Self::WaterShallow => "76A5AF",
+                    Self::WaterDeep => "45818E",
+                },
+                16,
+            )
+            .unwrap(),
+        )
+    }
 }
 
-struct AssetUI {
-    pub asset: Asset,
-    pub position: Vec2,
-    pub size: Option<Vec2>,
-}
+const HEX_RADIUS: f32 = 50.0;
+const COS_30: f32 = 0.86602540378;
+const ROAD_W: f32 = 2.0 * (1.0 - COS_30) * HEX_RADIUS;
+pub const MARGIN: f32 = 10.0;
 
 fn get_player_color(player_id: usize) -> Color {
     match player_id {
@@ -28,431 +37,177 @@ fn get_player_color(player_id: usize) -> Color {
     }
 }
 
-#[macroquad::main("logistics-game")]
-async fn main() {
-    let mut rng = rand::thread_rng();
-    let mut graph = Graph {
-        cities: vec![
-            City::new_with_random_buildings(&mut rng, 200.0, 60.0),
-            City::new_with_random_buildings(&mut rng, 400.0, 60.0),
-            City::new_with_random_buildings(&mut rng, 600.0, 60.0),
-            City::new_with_random_buildings(&mut rng, 800.0, 60.0),
-            City::new_with_random_buildings(&mut rng, 1000.0, 60.0),
-            City::new_with_random_buildings(&mut rng, 300.0, 220.0),
-            City::new_with_random_buildings(&mut rng, 500.0, 220.0),
-            City::new_with_random_buildings(&mut rng, 700.0, 220.0),
-            City::new_with_random_buildings(&mut rng, 900.0, 220.0),
-            City::new_with_random_buildings(&mut rng, 1100.0, 220.0),
-            City::new_with_random_buildings(&mut rng, 200.0, 380.0),
-            City::new_with_random_buildings(&mut rng, 400.0, 380.0),
-            City::new_with_random_buildings(&mut rng, 600.0, 380.0),
-            City::new_with_random_buildings(&mut rng, 800.0, 380.0),
-            City::new_with_random_buildings(&mut rng, 1000.0, 380.0),
-            City::new_with_random_buildings(&mut rng, 300.0, 540.0),
-            City::new_with_random_buildings(&mut rng, 500.0, 540.0),
-            City::new_with_random_buildings(&mut rng, 700.0, 540.0),
-            City::new_with_random_buildings(&mut rng, 900.0, 540.0),
-            City::new_with_random_buildings(&mut rng, 1100.0, 540.0),
-        ],
-        connections: vec![
-            OwnedConnection::new(0, 1),
-            OwnedConnection::new(0, 5),
-            OwnedConnection::new(0, 10),
-            OwnedConnection::new(1, 2),
-            OwnedConnection::new(1, 6),
-            OwnedConnection::new(3, 4),
-            OwnedConnection::new(3, 7),
-            OwnedConnection::new(4, 8),
-            OwnedConnection::new(4, 9),
-            OwnedConnection::new(5, 11),
-            OwnedConnection::new(6, 7),
-            OwnedConnection::new(6, 12),
-            OwnedConnection::new(6, 16),
-            OwnedConnection::new(7, 8),
-            OwnedConnection::new(7, 12),
-            OwnedConnection::new(7, 13),
-            OwnedConnection::new(8, 9),
-            OwnedConnection::new(8, 13),
-            OwnedConnection::new(9, 19),
-            OwnedConnection::new(10, 15),
-            OwnedConnection::new(11, 16),
-            OwnedConnection::new(12, 16),
-            OwnedConnection::new(12, 17),
-            OwnedConnection::new(13, 14),
-            OwnedConnection::new(13, 17),
-            OwnedConnection::new(14, 18),
-            OwnedConnection::new(14, 19),
-            OwnedConnection::new(15, 16),
-            OwnedConnection::new(17, 18),
-            OwnedConnection::new(18, 19),
-        ],
-        businesses: vec![Business::new(), Business::new()],
-    };
+pub fn draw_button(x: f32, y: f32, w: f32, h: f32, color: Color) -> bool {
+    draw_rectangle(x, y, w, h, color);
+    let local_mouse_pos = Vec2::from_array(mouse_position().into()) - Vec2::new(x, y);
+    local_mouse_pos.cmpgt(Vec2::ZERO).all() && local_mouse_pos.cmplt(Vec2::new(w, h)).all()
+}
 
-    let mut current_player_id = 0;
+fn hex_idx_to_pos(x: i32, y: i32) -> Vec2 {
+    Vec2::new(
+        500.0 + 2.0 * HEX_RADIUS * x as f32 + HEX_RADIUS * (y % 2) as f32,
+        100.0 + f32::sqrt(3.0) * HEX_RADIUS * y as f32,
+    )
+}
 
-    let mut open_asset_ui_opt: Option<AssetUI> = None;
+fn draw_hex(x: i32, y: i32, terrain_type: &TerrainType, border_color: Option<Color>) -> bool {
+    let pos = hex_idx_to_pos(x, y);
+    let mouse_position = Vec2::from_array(mouse_position().into());
 
-    let mut textures: HashMap<String, Texture2D> = HashMap::new();
-    for texture_id in vec![
-        "chip",
-        "gold",
-        "wire",
-        "computer",
-        "logs",
-        "planks",
-        "chair",
-        "right_arrow",
-        "money",
-        "rocks",
-        "sand",
-        "energy",
-        "raw_oil",
-        "oil",
-        "glass",
-        "plastic",
-    ] {
-        textures.insert(
-            texture_id.to_string(),
-            load_texture(format!("assets/textures/{}.png", texture_id).as_str())
-                .await
-                .unwrap(),
+    let hovering = (mouse_position - pos).length() < HEX_RADIUS
+        && (0..6).any(|i| {
+            let a =
+                pos + HEX_RADIUS * Vec2::from_angle((i as f32 - 0.5) * std::f32::consts::PI / 3.0);
+            let b =
+                pos + HEX_RADIUS * Vec2::from_angle((i as f32 + 0.5) * std::f32::consts::PI / 3.0);
+
+            let u = ((b.y - pos.y) * (mouse_position.x - pos.x)
+                + (pos.x - b.x) * (mouse_position.y - pos.y))
+                / ((b.y - pos.y) * (a.x - pos.x) + (pos.x - b.x) * (a.y - pos.y));
+            let v = ((pos.y - a.y) * (mouse_position.x - pos.x)
+                + (a.x - pos.x) * (mouse_position.y - pos.y))
+                / ((b.y - pos.y) * (a.x - pos.x) + (pos.x - b.x) * (a.y - pos.y));
+
+            u >= 0.0 && v >= 0.0 && (u + v) <= 1.0
+        });
+
+    let color = terrain_type.get_color();
+    if let Some(color) = border_color {
+        draw_hexagon(pos.x, pos.y, HEX_RADIUS + 5.0, 0.0, true, WHITE, WHITE);
+    }
+    draw_hexagon(pos.x, pos.y, HEX_RADIUS, 0.0, true, color, color);
+    if hovering {
+        draw_hexagon(
+            pos.x,
+            pos.y,
+            HEX_RADIUS,
+            0.0,
+            true,
+            WHITE,
+            Color::new(1.0, 1.0, 1.0, 0.5),
         );
     }
+    hovering
+}
 
+fn draw_road(x: i32, y: i32, i: i32) -> bool {
+    let angle = i as f32 * std::f32::consts::PI / 3.0;
+    let mouse_position = Vec2::from_array(mouse_position().into());
+    let pos = hex_idx_to_pos(x, y) + HEX_RADIUS * Vec2::from_angle(angle);
+    let local_mouse_pos = Vec2::from_angle(-angle).rotate(mouse_position - pos);
+    let hovering = local_mouse_pos
+        .abs()
+        .cmplt(0.5 * Vec2::new(ROAD_W, HEX_RADIUS))
+        .all();
+    let color = if hovering {
+        Color::new(0.6, 0.6, 0.6, 1.00)
+    } else {
+        BLACK
+    };
+    draw_rectangle_ex(
+        pos.x,
+        pos.y,
+        ROAD_W,
+        HEX_RADIUS,
+        DrawRectangleParams {
+            rotation: i as f32 * std::f32::consts::PI / 3.0,
+            offset: Vec2::new(0.5, 0.5),
+            color: color,
+            ..Default::default()
+        },
+    );
+    hovering
+}
+
+#[macroquad::main("logistics-game")]
+async fn main() {
     request_new_screen_size(1920.0, 1080.0);
 
+    #[rustfmt::skip]
+    let mut game_data=GameData{tiles: [
+        [TerrainType::Desert, TerrainType::WaterShallow, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills],
+        [TerrainType::Desert, TerrainType::WaterShallow, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills],
+        [TerrainType::Desert, TerrainType::WaterShallow, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills],
+        [TerrainType::Desert, TerrainType::WaterShallow, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills],
+        [TerrainType::Desert, TerrainType::WaterShallow, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills],
+        [TerrainType::Forrest, TerrainType::Forrest, TerrainType::Forrest, TerrainType::Urban, TerrainType::Urban, TerrainType::WaterShallow, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep],
+        [TerrainType::Forrest, TerrainType::Forrest, TerrainType::Forrest, TerrainType::Urban, TerrainType::Urban, TerrainType::WaterShallow, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep],
+        [TerrainType::Forrest, TerrainType::Forrest, TerrainType::Forrest, TerrainType::Urban, TerrainType::Urban, TerrainType::WaterShallow, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep],
+        [TerrainType::Forrest, TerrainType::Forrest, TerrainType::Forrest, TerrainType::Urban, TerrainType::Urban, TerrainType::WaterShallow, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep],
+        [TerrainType::Forrest, TerrainType::Forrest, TerrainType::Forrest, TerrainType::Urban, TerrainType::Urban, TerrainType::WaterShallow, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep],
+        [TerrainType::Forrest, TerrainType::Forrest, TerrainType::Forrest, TerrainType::Urban, TerrainType::Urban, TerrainType::WaterShallow, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep],
+    ].iter().map(|row| row.iter().map(|terrain_type| Tile::new(&terrain_type)).collect::<Vec<Tile>>()).collect::<Vec<Vec<Tile>>>(), businesses: vec![Business::new()]};
+
+    let mut selected_hex_opt: Option<(usize, usize)> = None;
+    let current_player_id = 0;
     loop {
         clear_background(BLACK);
 
-        let mouse_button_pressed = is_mouse_button_pressed(MouseButton::Left);
-        let (mouse_x, mouse_y) = mouse_position();
-        let mouse_pos = Vec2::new(mouse_x, mouse_y);
-        let cursor_inside_asset_ui = open_asset_ui_opt.as_ref().is_some_and(|ui| {
-            let relative_mouse_pos = mouse_pos - ui.position;
-            relative_mouse_pos.cmpgt(Vec2::ZERO).all()
-                && relative_mouse_pos.cmplt(ui.size.unwrap()).all()
-        });
-
-        let owns_nothing = graph
-            .connections
-            .iter()
-            .all(|owned_connection| owned_connection.owner_id != Some(current_player_id))
-            && graph
-                .cities
-                .iter()
-                .flat_map(|city| city.owned_buildings.iter())
-                .all(|owned_building| owned_building.owner_id != Some(current_player_id));
-
-        let mut city_positions = HashMap::<usize, (f32, f32)>::new();
-        for (city_id, city) in graph.cities.iter().enumerate() {
-            city_positions.insert(city_id, (city.x, city.y));
-        }
-        for (connection_id, owned_connection) in graph.connections.iter().enumerate() {
-            let connection_width = 10.0;
-            assert!(owned_connection.city_ids.len() == 2);
-            let (start_x, start_y) = city_positions
-                .get(owned_connection.city_ids.get(0).unwrap())
-                .unwrap()
-                .clone();
-            let (end_x, end_y) = city_positions
-                .get(owned_connection.city_ids.get(1).unwrap())
-                .unwrap()
-                .clone();
-            let v = Vec2::new(end_x - start_x, end_y - start_y);
-            let angle = v.angle_between(Vec2::new(0.0, 1.0));
-            draw_rectangle_ex(
-                start_x,
-                start_y,
-                connection_width,
-                v.length(),
-                DrawRectangleParams {
-                    rotation: -angle,
-                    offset: Vec2::new(0.5, 0.0),
-                    color: owned_connection.owner_id.map_or(GRAY, get_player_color),
-                    ..Default::default()
-                },
-            );
-
-            let local_mouse_pos =
-                Vec2::from_angle(angle).rotate(mouse_pos - Vec2::new(start_x, start_y));
-            if !cursor_inside_asset_ui
-                && local_mouse_pos.x.abs() < connection_width / 2.0
-                && local_mouse_pos.y > 0.0
-                && local_mouse_pos.y < v.length()
-            {
-                open_asset_ui_opt = Some(AssetUI {
-                    asset: Asset::Connection(connection_id),
-                    position: Vec2::new((start_x + end_x) / 2.0, (start_y + end_y) / 2.0),
-                    size: None,
-                });
-            }
-        }
-
-        for (city_id, city) in graph.cities.iter().enumerate() {
-            let city_radius = 50.0;
-            let building_radius = 10.0;
-
-            draw_hexagon(
-                city.x,
-                city.y,
-                city_radius,
-                0.0,
-                true,
-                WHITE,
-                Color {
-                    r: 0.0,
-                    g: 1.0,
-                    b: 1.0,
-                    a: 1.0,
-                },
-            );
-
-            for (building_id, owned_building) in city.owned_buildings.iter().enumerate() {
-                let rad = 2.0 * std::f32::consts::PI * (building_id as f32 / 6.0);
-                let building_pos = Vec2::new(
-                    0.5 * city_radius * f32::sin(rad) + city.x,
-                    0.5 * city_radius * f32::cos(rad) + city.y,
-                );
-                draw_circle(
-                    building_pos.x,
-                    building_pos.y,
-                    building_radius,
-                    owned_building.owner_id.map_or(GRAY, get_player_color),
-                );
-                let building_marker =
-                    if owned_building
-                        .production_scale
-                        .iter()
-                        .any(|scaled_valid_recipe| {
-                            scaled_valid_recipe
-                                .valid_recipe
-                                .get_recipe()
-                                .materials
-                                .iter()
-                                .any(|(material, _)| material == &Material::Money)
+        let click = is_mouse_button_pressed(MouseButton::Left);
+        for (row_index, row) in game_data.tiles.iter().enumerate() {
+            for (col_index, tile) in row.iter().enumerate() {
+                let x = col_index as i32;
+                let y = row_index as i32;
+                for i in 0..3 {
+                    draw_road(x, y, i);
+                }
+                let hovering = draw_hex(
+                    x,
+                    y,
+                    &tile.terrain_type,
+                    selected_hex_opt
+                        .filter(|(selected_x, selected_y)| {
+                            *selected_x == row_index && *selected_y == col_index
                         })
-                    {
-                        "M"
-                    } else {
-                        ""
-                    };
-                draw_text(
-                    building_marker,
-                    building_pos.x - 0.5 * building_radius,
-                    building_pos.y + 0.5 * building_radius,
-                    24.0,
-                    BLACK,
+                        .and(Some(WHITE)),
                 );
-                if !cursor_inside_asset_ui && (mouse_pos - building_pos).length() < building_radius
-                {
-                    open_asset_ui_opt = Some(AssetUI {
-                        asset: Asset::Building((city_id, building_id)),
-                        position: building_pos,
-                        size: None,
-                    });
+                if let Some(owner_id) = tile.owner_id {
+                    let Vec2 {
+                        x: marker_x,
+                        y: marker_y,
+                    } = hex_idx_to_pos(x, y);
+                    draw_circle(marker_x, marker_y, HEX_RADIUS / 4.0, WHITE);
+                    draw_circle(
+                        marker_x,
+                        marker_y,
+                        HEX_RADIUS / 5.0,
+                        get_player_color(owner_id),
+                    );
+                }
+                if click && hovering {
+                    selected_hex_opt = Some((row_index, col_index));
                 }
             }
         }
-
-        let x_ = MARGIN;
-        let mut y_ = MARGIN;
-        draw_button(x_, y_, 100.0, MARGIN, get_player_color(current_player_id));
-        y_ += MARGIN + MARGIN;
-        for (material, quantity_info) in graph.get_resource_stock(current_player_id) {
-            draw_texture_ex(
-                textures.get(&material.get_texture_id()).unwrap(),
-                x_,
-                y_,
-                WHITE,
-                DrawTextureParams {
-                    dest_size: Some(Vec2::splat(ICON_SIZE)),
-                    ..Default::default()
-                },
-            );
-
+        if is_key_pressed(KeyCode::Escape) {
+            selected_hex_opt = None;
+        }
+        if let Some((tile_x, tile_y)) = selected_hex_opt {
+            let tile = game_data
+                .tiles
+                .get_mut(tile_x)
+                .unwrap()
+                .get_mut(tile_y)
+                .unwrap();
+            draw_rectangle(0.0, 0.0, 400.0, screen_height(), GRAY);
             draw_text(
-                format!(
-                    "{}({:+})",
-                    quantity_info.quantity,
-                    quantity_info.gross_in - quantity_info.gross_out,
-                )
-                .as_str(),
-                x_ + ICON_SIZE + MARGIN,
-                y_ + ICON_SIZE / 2.0,
-                24.0,
+                format!("{:?}", tile.terrain_type).as_str(),
+                MARGIN,
+                MARGIN + 32.0,
+                32.0,
                 WHITE,
             );
-            y_ += ICON_SIZE + MARGIN;
-        }
-        if ButtonState::Pressed == draw_next_turn_button(screen_width() - 200.0, MARGIN).0 {
-            current_player_id += 1;
-            if graph.businesses.get(current_player_id).is_none() {
-                current_player_id = 0;
+            let buy_hovered = draw_button(MARGIN, 100.0, 150.0, 40.0, RED);
+            draw_text(
+                format!("Buy, ${}", 100.0).as_str(),
+                2.0 * MARGIN,
+                120.0,
+                28.0,
+                WHITE,
+            );
+            if buy_hovered && click {
+                tile.owner_id = Some(current_player_id);
             }
-            graph.update_business_resources(current_player_id);
-        }
-
-        let resource_stock = graph.get_resource_stock(current_player_id);
-        if let Some(open_asset_ui) = open_asset_ui_opt.as_mut() {
-            open_asset_ui.size = Some(match open_asset_ui.asset {
-                Asset::Building((city_id, building_id)) => {
-                    let owns_building_in_city = graph
-                        .cities
-                        .get(city_id)
-                        .unwrap()
-                        .owned_buildings
-                        .iter()
-                        .any(|owned_building| owned_building.owner_id == Some(current_player_id));
-                    let building = graph
-                        .cities
-                        .get_mut(city_id)
-                        .unwrap()
-                        .owned_buildings
-                        .get_mut(building_id)
-                        .unwrap();
-
-                    let x = open_asset_ui.position.x;
-                    let y = open_asset_ui.position.y;
-
-                    match building.owner_id {
-                        Some(id) if id == current_player_id => {
-                            draw_recipes_panel(x, y, building, &resource_stock, &textures, true)
-                        }
-                        Some(other_id) => {
-                            draw_message_box_ui(x, y, format!("Owned by {}", other_id).as_str())
-                        }
-                        None => {
-                            let can_buy = owns_nothing
-                                || graph.connections.iter().any(|owned_connection| {
-                                    owned_connection.owner_id == Some(current_player_id)
-                                        && owned_connection.city_ids.contains(&city_id)
-                                })
-                                || owns_building_in_city;
-
-                            match can_buy {
-                                true => {
-                                    let (buy_ui_state, size) =
-                                        draw_buy_ui(x, y, building.acquisition_cost);
-                                    if resource_stock.get(&Material::Money).unwrap().quantity
-                                        >= building.acquisition_cost
-                                        && buy_ui_state == ButtonState::Pressed
-                                    {
-                                        building.owner_id = Some(current_player_id);
-                                        *graph
-                                            .businesses
-                                            .get_mut(current_player_id)
-                                            .unwrap()
-                                            .resources
-                                            .get_mut(&backend::Material::Money)
-                                            .unwrap() -= building.acquisition_cost;
-                                    }
-                                    draw_recipes_panel(
-                                        x,
-                                        y + size.y,
-                                        building,
-                                        &resource_stock,
-                                        &textures,
-                                        false,
-                                    ) + Vec2::new(0.0, size.y)
-                                }
-                                false => {
-                                    let size =
-                                        draw_message_box_ui(x, y, "Not connected\nto your network");
-
-                                    draw_recipes_panel(
-                                        x,
-                                        y + size.y,
-                                        building,
-                                        &resource_stock,
-                                        &textures,
-                                        false,
-                                    ) + Vec2::new(0.0, size.y)
-                                }
-                            }
-                        }
-                    }
-                }
-                Asset::Connection(connection_id) => {
-                    let owned_connection = graph.connections.get(connection_id).unwrap();
-
-                    let (start_x, start_y) = city_positions
-                        .get(owned_connection.city_ids.get(0).unwrap())
-                        .unwrap()
-                        .clone();
-                    let (end_x, end_y) = city_positions
-                        .get(owned_connection.city_ids.get(1).unwrap())
-                        .unwrap()
-                        .clone();
-                    let x = (start_x + end_x) / 2.0;
-                    let y = (start_y + end_y) / 2.0;
-
-                    match owned_connection.owner_id {
-                        Some(id) if id == current_player_id => {
-                            draw_message_box_ui(x, y, "Maintenance cost: 0")
-                        }
-                        Some(other_id) => {
-                            draw_message_box_ui(x, y, format!("Owned by {}", other_id).as_str())
-                        }
-                        None => {
-                            let can_buy =
-                                graph.connections.iter().any(|owned_connection| {
-                                    owned_connection.owner_id == Some(current_player_id)
-                                        && owned_connection.city_ids.iter().any(|city_id| {
-                                            graph
-                                                .connections
-                                                .get(connection_id)
-                                                .unwrap()
-                                                .city_ids
-                                                .contains(city_id)
-                                        })
-                                }) || graph.cities.iter().enumerate().any(|(city_it_id, city)| {
-                                    city.owned_buildings.iter().any(|owned_building| {
-                                        owned_building.owner_id == Some(current_player_id)
-                                            && owned_connection.city_ids.iter().any(|city_id| {
-                                                graph
-                                                    .connections
-                                                    .get(connection_id)
-                                                    .unwrap()
-                                                    .city_ids
-                                                    .contains(&city_it_id)
-                                            })
-                                    })
-                                });
-
-                            match can_buy {
-                                true => {
-                                    let (clicked, size) =
-                                        draw_buy_ui(x, y, owned_connection.acquisition_cost);
-                                    open_asset_ui.size = Some(size);
-                                    if resource_stock.get(&Material::Money).unwrap().quantity
-                                        >= owned_connection.acquisition_cost
-                                        && clicked == ButtonState::Pressed
-                                    {
-                                        let owned_connection =
-                                            graph.connections.get_mut(connection_id).unwrap();
-                                        owned_connection.owner_id = Some(current_player_id);
-                                        *graph
-                                            .businesses
-                                            .get_mut(current_player_id)
-                                            .unwrap()
-                                            .resources
-                                            .get_mut(&backend::Material::Money)
-                                            .unwrap() -= owned_connection.acquisition_cost;
-                                    }
-                                    size
-                                }
-                                false => {
-                                    draw_message_box_ui(x, y, "Not connected\nto your network")
-                                }
-                            }
-                        }
-                    }
-                }
-            })
-        }
-        if mouse_button_pressed && !cursor_inside_asset_ui {
-            open_asset_ui_opt = None;
         }
         next_frame().await
     }

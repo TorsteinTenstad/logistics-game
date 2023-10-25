@@ -1,4 +1,3 @@
-use rand::{rngs::ThreadRng, Rng};
 use std::collections::BTreeMap;
 
 #[derive(PartialEq, Eq, Hash, PartialOrd, Ord, Clone)]
@@ -217,15 +216,14 @@ impl BuildingType {
     }
 }
 
-pub struct OwnedBuilding {
+pub struct Building {
     pub building_type: BuildingType,
     pub production_scale: Vec<ScaledValidRecipe>,
-    pub owner_id: Option<usize>,
-    pub acquisition_cost: i32,
+    pub construction_cost: i32,
 }
 
-impl OwnedBuilding {
-    pub fn new(building_type: BuildingType) -> OwnedBuilding {
+impl Building {
+    pub fn new(building_type: BuildingType) -> Self {
         Self {
             building_type: building_type,
             production_scale: building_type
@@ -237,8 +235,7 @@ impl OwnedBuilding {
                     max_scale: 5,
                 })
                 .collect(),
-            owner_id: None,
-            acquisition_cost: match building_type {
+            construction_cost: match building_type {
                 BuildingType::Market => 20,
                 BuildingType::EnergyMarket => 20,
                 BuildingType::Sawmill => 80,
@@ -257,73 +254,34 @@ impl OwnedBuilding {
             },
         }
     }
-    pub fn new_random(rng: &mut ThreadRng) -> Self {
-        let options = vec![
-            BuildingType::Market,
-            BuildingType::EnergyMarket,
-            BuildingType::Sawmill,
-            BuildingType::FurnitureFactory,
-            BuildingType::WoodWorkingMarket,
-            BuildingType::ComputerFactory,
-            BuildingType::SandPlant,
-            BuildingType::TreeFarm,
-            BuildingType::Mine,
-            BuildingType::MetalRefinery,
-            BuildingType::GlassFactory,
-            BuildingType::OilRig,
-            BuildingType::OilRefinery,
-            BuildingType::OilEnergyPlant,
-            BuildingType::PlasticFactory,
-        ];
-        Self::new(
-            options
-                .get(rng.gen_range(0..options.len()))
-                .unwrap()
-                .clone(),
-        )
-    }
 }
 
-pub struct City {
-    pub x: f32,
-    pub y: f32,
-    pub owned_buildings: Vec<OwnedBuilding>,
+#[derive(Debug, Clone)]
+pub enum TerrainType {
+    Grassland,
+    Forrest,
+    Desert,
+    Hills,
+    Mountain,
+    Urban,
+    WaterShallow,
+    WaterDeep,
 }
 
-impl City {
-    pub fn new_with_random_buildings(rng: &mut ThreadRng, x: f32, y: f32) -> Self {
-        Self {
-            x: x,
-            y: y,
-            owned_buildings: (0..rng.gen_range(1..7))
-                .into_iter()
-                .map(|_i| OwnedBuilding::new_random(rng))
-                .collect(),
-        }
-    }
-}
-
-pub struct OwnedConnection {
-    pub city_ids: Vec<usize>,
+pub struct Tile {
+    pub terrain_type: TerrainType,
     pub owner_id: Option<usize>,
-    pub acquisition_cost: i32,
+    pub building: Option<Building>,
 }
 
-impl OwnedConnection {
-    pub fn new(city_id_a: usize, city_id_b: usize) -> Self {
+impl Tile {
+    pub fn new(terrain_type: &TerrainType) -> Self {
         Self {
-            city_ids: vec![city_id_a, city_id_b],
+            terrain_type: terrain_type.clone(),
             owner_id: None,
-            acquisition_cost: 20,
+            building: None,
         }
     }
-}
-
-#[derive(Default)]
-pub struct Graph {
-    pub cities: Vec<City>,
-    pub connections: Vec<OwnedConnection>,
-    pub businesses: Vec<Business>,
 }
 
 #[derive(Default)]
@@ -354,7 +312,12 @@ impl QuantityInfo {
     }
 }
 
-impl Graph {
+pub struct GameData {
+    pub tiles: Vec<Vec<Tile>>,
+    pub businesses: Vec<Business>,
+}
+
+impl GameData {
     pub fn get_resource_stock(&self, business_id: usize) -> BTreeMap<Material, QuantityInfo> {
         let mut resource_stock: BTreeMap<Material, QuantityInfo> = BTreeMap::new();
         for ScaledValidRecipe {
@@ -362,11 +325,15 @@ impl Graph {
             scale,
             max_scale: _,
         } in self
-            .cities
+            .tiles
             .iter()
-            .flat_map(|city| city.owned_buildings.iter())
-            .filter(|owned_building| owned_building.owner_id == Some(business_id))
-            .flat_map(|owned_building| owned_building.production_scale.iter())
+            .flat_map(|row| row.iter())
+            .filter_map(|tile| {
+                tile.building
+                    .as_ref()
+                    .filter(|_| tile.owner_id == Some(business_id))
+            })
+            .flat_map(|building| building.production_scale.iter())
             .filter(|s| (s.scale != 0))
         {
             for (material, quantity) in valid_recipe.get_recipe().materials {
