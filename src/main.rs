@@ -6,7 +6,8 @@ use std::{
 use macroquad::prelude::*;
 mod backend;
 use backend::{
-    BuildingType, Business, GameData, QuantityInfo, Resource, ScaledValidRecipe, TerrainType, Tile,
+    BuildingType, Business, GameData, QuantityInfo, Resource, Road, ScaledValidRecipe, TerrainType,
+    Tile,
 };
 
 use crate::backend::Building;
@@ -61,6 +62,7 @@ const HEX_RADIUS: f32 = 80.0;
 const COS_30: f32 = 0.86602540378;
 const ROAD_W: f32 = 2.0 * (1.0 - COS_30) * HEX_RADIUS;
 const ICON_SIZE: f32 = 40.0;
+const SELECTED_BORDER_W: f32 = 4.0;
 pub const MARGIN: f32 = 10.0;
 pub const TEXTURE_SIZE: f32 = 60.0;
 
@@ -184,14 +186,14 @@ pub fn draw_recipes_panel(
     Vec2::new(w, h)
 }
 
-fn hex_idx_to_pos(x: i32, y: i32) -> Vec2 {
+fn hex_idx_to_pos(x: usize, y: usize) -> Vec2 {
     Vec2::new(
         680.0 + 2.0 * HEX_RADIUS * x as f32 + HEX_RADIUS * (y % 2) as f32,
         100.0 + f32::sqrt(3.0) * HEX_RADIUS * y as f32,
     )
 }
 
-fn draw_hex(x: i32, y: i32, terrain_type: &TerrainType, border_color: Option<Color>) -> bool {
+fn draw_hex(x: usize, y: usize, terrain_type: &TerrainType, border_color: Option<Color>) -> bool {
     let pos = hex_idx_to_pos(x, y);
     let mouse_position = Vec2::from_array(mouse_position().into());
 
@@ -231,33 +233,72 @@ fn draw_hex(x: i32, y: i32, terrain_type: &TerrainType, border_color: Option<Col
     hovering
 }
 
-fn draw_road(x: i32, y: i32, i: i32) -> bool {
-    let angle = i as f32 * std::f32::consts::PI / 3.0;
+fn draw_road(
+    tile_a_idx: (usize, usize),
+    tile_b_idx: (usize, usize),
+    selected: bool,
+    owner_color: Option<Color>,
+) -> bool {
+    let tile_a_pos = hex_idx_to_pos(tile_a_idx.0, tile_a_idx.1);
+    let tile_b_pos = hex_idx_to_pos(tile_b_idx.0, tile_b_idx.1);
+    let angle = (tile_b_pos - tile_a_pos).angle_between(Vec2::new(1.0, 0.0));
     let mouse_position = Vec2::from_array(mouse_position().into());
-    let pos = hex_idx_to_pos(x, y) + HEX_RADIUS * Vec2::from_angle(angle);
+    let pos = (tile_a_pos + tile_b_pos) / 2.0;
     let local_mouse_pos = Vec2::from_angle(-angle).rotate(mouse_position - pos);
     let hovering = local_mouse_pos
         .abs()
-        .cmplt(0.5 * Vec2::new(ROAD_W, HEX_RADIUS))
+        .cmplt(0.5 * Vec2::new(HEX_RADIUS, ROAD_W))
         .all();
-    let color = if hovering {
-        Color::new(0.6, 0.6, 0.6, 1.00)
-    } else {
-        BLACK
-    };
-    draw_rectangle_ex(
-        pos.x,
-        pos.y,
-        ROAD_W,
-        HEX_RADIUS,
-        DrawRectangleParams {
-            rotation: i as f32 * std::f32::consts::PI / 3.0,
-            offset: Vec2::new(0.5, 0.5),
-            color: color,
-            ..Default::default()
-        },
-    );
+    if selected {
+        draw_rectangle_ex(
+            pos.x,
+            pos.y,
+            HEX_RADIUS + 2.0 * SELECTED_BORDER_W,
+            ROAD_W + 2.0 * SELECTED_BORDER_W,
+            DrawRectangleParams {
+                rotation: -angle,
+                offset: Vec2::new(0.5, 0.5),
+                color: WHITE,
+                ..Default::default()
+            },
+        );
+    }
+    if let Some(color) = owner_color {
+        draw_rectangle_ex(
+            pos.x,
+            pos.y,
+            HEX_RADIUS,
+            ROAD_W,
+            DrawRectangleParams {
+                rotation: -angle,
+                offset: Vec2::new(0.5, 0.5),
+                color,
+                ..Default::default()
+            },
+        );
+    }
+    if hovering || selected {
+        draw_rectangle_ex(
+            pos.x,
+            pos.y,
+            HEX_RADIUS,
+            ROAD_W,
+            DrawRectangleParams {
+                rotation: -angle,
+                offset: Vec2::new(0.5, 0.5),
+                color: Color::new(1.0, 1.0, 1.0, 0.5),
+                ..Default::default()
+            },
+        );
+    }
     hovering
+}
+
+#[derive(PartialEq, Eq)]
+enum SelectedAsset {
+    TileIds(usize, usize),
+    RoadIds(usize),
+    None,
 }
 
 #[macroquad::main("logistics-game")]
@@ -306,38 +347,46 @@ async fn main() {
     }
 
     #[rustfmt::skip]
-    let mut game_data=GameData{tiles: [
-        [TerrainType::Hills, TerrainType::Hills, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain],
-        [TerrainType::Desert, TerrainType::Hills, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Hills, TerrainType::Hills],
-        [TerrainType::Desert, TerrainType::Hills, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Hills, TerrainType::Industrial, TerrainType::Industrial],
-        [TerrainType::Forrest, TerrainType::Forrest, TerrainType::Forrest, TerrainType::Urban, TerrainType::Urban, TerrainType::Industrial, TerrainType::Industrial],
-        [TerrainType::Mountain, TerrainType::Mountain, TerrainType::Forrest, TerrainType::Urban, TerrainType::Urban, TerrainType::Urban, TerrainType::Industrial],
-        [TerrainType::Mountain, TerrainType::Industrial, TerrainType::Industrial, TerrainType::Forrest, TerrainType::Urban, TerrainType::Urban, TerrainType::WaterShallow],
-        [TerrainType::Mountain, TerrainType::Industrial, TerrainType::Industrial, TerrainType::Forrest, TerrainType::Forrest, TerrainType::WaterShallow, TerrainType::WaterShallow],
-    ].iter().map(|row| row.iter().map(|terrain_type| Tile::new(&terrain_type)).collect::<Vec<Tile>>()).collect::<Vec<Vec<Tile>>>(), businesses: vec![Business::new(),Business::new()]};
+    let mut game_data= GameData::new(
+        [
+            [TerrainType::Hills, TerrainType::Hills, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain],
+            [TerrainType::Desert, TerrainType::Hills, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Hills, TerrainType::Hills],
+            [TerrainType::Desert, TerrainType::Hills, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Hills, TerrainType::Industrial, TerrainType::Industrial],
+            [TerrainType::Forrest, TerrainType::Forrest, TerrainType::Forrest, TerrainType::Urban, TerrainType::Urban, TerrainType::Industrial, TerrainType::Industrial],
+            [TerrainType::Mountain, TerrainType::Mountain, TerrainType::Forrest, TerrainType::Urban, TerrainType::Urban, TerrainType::Urban, TerrainType::Industrial],
+            [TerrainType::Mountain, TerrainType::Industrial, TerrainType::Industrial, TerrainType::Forrest, TerrainType::Urban, TerrainType::Urban, TerrainType::WaterShallow],
+            [TerrainType::Mountain, TerrainType::Industrial, TerrainType::Industrial, TerrainType::Forrest, TerrainType::Forrest, TerrainType::WaterShallow, TerrainType::WaterShallow],
+            ]
+            .iter()
+            .map(|row| {
+                row.iter()
+                    .map(|terrain_type| Tile::new(&terrain_type))
+                    .collect::<Vec<Tile>>()
+            })
+            .collect::<Vec<Vec<Tile>>>(),
+            2,
+        );
 
-    let mut selected_hex_opt: Option<(usize, usize)> = None;
+    let mut selected_opt: SelectedAsset = SelectedAsset::None;
     let mut current_player_id = 0;
     loop {
         clear_background(BLACK);
 
         let click = is_mouse_button_pressed(MouseButton::Left);
-        for (row_index, row) in game_data.tiles.iter().enumerate() {
-            for (col_index, tile) in row.iter().enumerate() {
-                let x = col_index as i32;
-                let y = row_index as i32;
-                for i in 0..3 {
-                    draw_road(x, y, i);
-                }
+        for (x, row) in game_data.tiles.iter().enumerate() {
+            for (y, tile) in row.iter().enumerate() {
                 let hovering = draw_hex(
                     x,
                     y,
                     &tile.terrain_type,
-                    selected_hex_opt
-                        .filter(|(selected_x, selected_y)| {
-                            *selected_x == row_index && *selected_y == col_index
-                        })
-                        .and(Some(WHITE)),
+                    match selected_opt {
+                        SelectedAsset::TileIds(selected_x, selected_y)
+                            if selected_x == x && selected_y == y =>
+                        {
+                            Some(WHITE)
+                        }
+                        _ => None,
+                    },
                 );
                 if let Some(owner_id) = tile.owner_id {
                     let Vec2 {
@@ -370,8 +419,28 @@ async fn main() {
                     }
                 }
                 if click && hovering {
-                    selected_hex_opt = Some((row_index, col_index));
+                    selected_opt = SelectedAsset::TileIds(x, y);
                 }
+            }
+        }
+        for (
+            road_id,
+            Road {
+                tile_a_idx,
+                tile_b_idx,
+                owner_id,
+            },
+        ) in game_data.roads.iter().enumerate()
+        {
+            let is_selected = selected_opt == SelectedAsset::RoadIds(road_id);
+            let hovering_road = draw_road(
+                *tile_a_idx,
+                *tile_b_idx,
+                is_selected,
+                owner_id.map(|id| get_player_color(id)),
+            );
+            if click && hovering_road {
+                selected_opt = SelectedAsset::RoadIds(road_id);
             }
         }
 
@@ -417,125 +486,165 @@ async fn main() {
         }
 
         if is_key_pressed(KeyCode::Escape) {
-            selected_hex_opt = None;
+            selected_opt = SelectedAsset::None;
         }
 
         let mut resource_stock = game_data.get_resource_stock(current_player_id);
+        let player_money = resource_stock.get_mut(&Resource::Money).unwrap();
         let PANEL_X = 200.0;
-        if let Some((tile_x, tile_y)) = selected_hex_opt {
-            let tile = game_data
-                .tiles
-                .get_mut(tile_x)
-                .unwrap()
-                .get_mut(tile_y)
-                .unwrap();
-            draw_rectangle(PANEL_X, 0.0, 400.0, screen_height(), GRAY);
-            draw_text(
-                format!("{:?}", tile.terrain_type).as_str(),
-                PANEL_X + MARGIN,
-                MARGIN + 32.0,
-                32.0,
-                WHITE,
-            );
-            let player_money = resource_stock.get_mut(&Resource::Money).unwrap();
-            match tile.owner_id {
-                Some(id) if id == current_player_id => {}
-                Some(id) => {}
-                None => {
-                    let acquisition_cost = tile.get_acquisition_cost();
-                    let buy_hovered = draw_button(PANEL_X + MARGIN, 100.0, 150.0, 40.0, RED);
-                    draw_text(
-                        format!("Buy, ${}", acquisition_cost).as_str(),
-                        PANEL_X + 2.0 * MARGIN,
-                        120.0,
-                        28.0,
-                        WHITE,
-                    );
-                    if buy_hovered
-                        && click
-                        && player_money.quantity - player_money.net_out().abs() >= acquisition_cost
-                    {
-                        tile.owner_id = Some(current_player_id);
-                        *game_data
-                            .businesses
-                            .get_mut(current_player_id)
-                            .unwrap()
-                            .resources
-                            .get_mut(&backend::Resource::Money)
-                            .unwrap() -= acquisition_cost;
-                    }
-                }
-            }
-            let mut y_ = 200.0;
-            let mut preview_building_type: Option<BuildingType> = None;
-            if let Some(building) = tile.building.as_mut() {
-                draw_text(
-                    format!("{:?}", building.building_type).as_str(),
-                    PANEL_X + MARGIN,
-                    y_,
-                    32.0,
-                    WHITE,
-                );
-                draw_recipes_panel(
-                    PANEL_X,
-                    y_,
-                    building,
-                    &resource_stock,
-                    &textures,
-                    tile.owner_id == Some(current_player_id),
-                );
-            } else {
-                draw_text("Available buildings:", PANEL_X + MARGIN, y_, 32.0, WHITE);
-                y_ += 40.0;
-                for building_type in tile.terrain_type.supported_building_types() {
-                    draw_text(
-                        format!("{:?}", building_type).as_str(),
-                        PANEL_X + MARGIN,
-                        y_,
-                        24.0,
-                        WHITE,
-                    );
-                    let construction_cost = building_type.get_construction_cost();
-                    if tile.owner_id == Some(current_player_id) && tile.building.is_none() {
-                        let hover_build = draw_button(PANEL_X + 300.0, y_ - 20.0, 100.0, 28.0, RED);
+        match selected_opt {
+            SelectedAsset::None => (),
+            SelectedAsset::RoadIds(road_id) => {
+                let road = game_data.roads.get_mut(road_id).unwrap();
+                draw_rectangle(PANEL_X, 0.0, 400.0, screen_height(), GRAY);
+                draw_text("Road", PANEL_X + MARGIN, MARGIN + 32.0, 32.0, WHITE);
+                match road.owner_id {
+                    Some(id) if id == current_player_id => {}
+                    Some(id) => {}
+                    None => {
+                        let acquisition_cost = road.get_acquisition_cost();
+                        let buy_hovered = draw_button(PANEL_X + MARGIN, 100.0, 150.0, 40.0, RED);
                         draw_text(
-                            format!("Buy, ${}", construction_cost).as_str(),
-                            PANEL_X + 300.0 + MARGIN,
-                            y_,
-                            22.0,
+                            format!("Buy, ${}", acquisition_cost).as_str(),
+                            PANEL_X + 2.0 * MARGIN,
+                            120.0,
+                            28.0,
                             WHITE,
                         );
-                        if hover_build
+                        if buy_hovered
                             && click
                             && player_money.quantity - player_money.net_out().abs()
-                                >= construction_cost
+                                >= acquisition_cost
                         {
-                            tile.building = Some(Building::new(building_type));
+                            road.owner_id = Some(current_player_id);
                             *game_data
                                 .businesses
                                 .get_mut(current_player_id)
                                 .unwrap()
                                 .resources
                                 .get_mut(&backend::Resource::Money)
-                                .unwrap() -= construction_cost;
+                                .unwrap() -= acquisition_cost;
                         }
                     }
-                    let hover_preview = draw_button(PANEL_X + 200.0, y_ - 20.0, 90.0, 28.0, RED);
-                    if hover_preview {
-                        preview_building_type = Some(building_type)
-                    }
-                    draw_text("Preview", PANEL_X + 200.0 + MARGIN, y_, 22.0, WHITE);
-                    y_ += 32.0;
                 }
-                if let Some(building_type) = preview_building_type {
+            }
+            SelectedAsset::TileIds(tile_x, tile_y) => {
+                let tile = game_data
+                    .tiles
+                    .get_mut(tile_x)
+                    .unwrap()
+                    .get_mut(tile_y)
+                    .unwrap();
+                draw_rectangle(PANEL_X, 0.0, 400.0, screen_height(), GRAY);
+                draw_text(
+                    format!("{:?}", tile.terrain_type).as_str(),
+                    PANEL_X + MARGIN,
+                    MARGIN + 32.0,
+                    32.0,
+                    WHITE,
+                );
+                match tile.owner_id {
+                    Some(id) if id == current_player_id => {}
+                    Some(id) => {}
+                    None => {
+                        let acquisition_cost = tile.get_acquisition_cost();
+                        let buy_hovered = draw_button(PANEL_X + MARGIN, 100.0, 150.0, 40.0, RED);
+                        draw_text(
+                            format!("Buy, ${}", acquisition_cost).as_str(),
+                            PANEL_X + 2.0 * MARGIN,
+                            120.0,
+                            28.0,
+                            WHITE,
+                        );
+                        if buy_hovered
+                            && click
+                            && player_money.quantity - player_money.net_out().abs()
+                                >= acquisition_cost
+                        {
+                            tile.owner_id = Some(current_player_id);
+                            *game_data
+                                .businesses
+                                .get_mut(current_player_id)
+                                .unwrap()
+                                .resources
+                                .get_mut(&backend::Resource::Money)
+                                .unwrap() -= acquisition_cost;
+                        }
+                    }
+                }
+                let mut y_ = 200.0;
+                let mut preview_building_type: Option<BuildingType> = None;
+                if let Some(building) = tile.building.as_mut() {
+                    draw_text(
+                        format!("{:?}", building.building_type).as_str(),
+                        PANEL_X + MARGIN,
+                        y_,
+                        32.0,
+                        WHITE,
+                    );
                     draw_recipes_panel(
                         PANEL_X,
-                        y_ + MARGIN,
-                        &mut Building::new(building_type),
+                        y_,
+                        building,
                         &resource_stock,
                         &textures,
-                        false,
+                        tile.owner_id == Some(current_player_id),
                     );
+                } else {
+                    draw_text("Available buildings:", PANEL_X + MARGIN, y_, 32.0, WHITE);
+                    y_ += 40.0;
+                    for building_type in tile.terrain_type.supported_building_types() {
+                        draw_text(
+                            format!("{:?}", building_type).as_str(),
+                            PANEL_X + MARGIN,
+                            y_,
+                            24.0,
+                            WHITE,
+                        );
+                        let construction_cost = building_type.get_construction_cost();
+                        if tile.owner_id == Some(current_player_id) && tile.building.is_none() {
+                            let hover_build =
+                                draw_button(PANEL_X + 300.0, y_ - 20.0, 100.0, 28.0, RED);
+                            draw_text(
+                                format!("Buy, ${}", construction_cost).as_str(),
+                                PANEL_X + 300.0 + MARGIN,
+                                y_,
+                                22.0,
+                                WHITE,
+                            );
+                            if hover_build
+                                && click
+                                && player_money.quantity - player_money.net_out().abs()
+                                    >= construction_cost
+                            {
+                                tile.building = Some(Building::new(building_type));
+                                *game_data
+                                    .businesses
+                                    .get_mut(current_player_id)
+                                    .unwrap()
+                                    .resources
+                                    .get_mut(&backend::Resource::Money)
+                                    .unwrap() -= construction_cost;
+                            }
+                        }
+                        let hover_preview =
+                            draw_button(PANEL_X + 200.0, y_ - 20.0, 90.0, 28.0, RED);
+                        if hover_preview {
+                            preview_building_type = Some(building_type)
+                        }
+                        draw_text("Preview", PANEL_X + 200.0 + MARGIN, y_, 22.0, WHITE);
+                        y_ += 32.0;
+                    }
+                    if let Some(building_type) = preview_building_type {
+                        draw_recipes_panel(
+                            PANEL_X,
+                            y_ + MARGIN,
+                            &mut Building::new(building_type),
+                            &resource_stock,
+                            &textures,
+                            false,
+                        );
+                    }
                 }
             }
         }

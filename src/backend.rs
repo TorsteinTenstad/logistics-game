@@ -309,6 +309,25 @@ impl TerrainType {
     }
 }
 
+pub struct Road {
+    pub tile_a_idx: (usize, usize),
+    pub tile_b_idx: (usize, usize),
+    pub owner_id: Option<usize>,
+}
+
+impl Road {
+    pub fn new(tile_a_idx: (usize, usize), tile_b_idx: (usize, usize)) -> Self {
+        Self {
+            tile_a_idx,
+            tile_b_idx,
+            owner_id: None,
+        }
+    }
+    pub fn get_acquisition_cost(&self) -> i32 {
+        20
+    }
+}
+
 pub struct Tile {
     pub terrain_type: TerrainType,
     pub owner_id: Option<usize>,
@@ -328,7 +347,7 @@ impl Tile {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Business {
     pub resources: BTreeMap<Resource, i32>,
 }
@@ -358,10 +377,32 @@ impl QuantityInfo {
 
 pub struct GameData {
     pub tiles: Vec<Vec<Tile>>,
+    pub roads: Vec<Road>,
     pub businesses: Vec<Business>,
 }
 
 impl GameData {
+    pub fn new(tiles: Vec<Vec<Tile>>, num_businesses: i32) -> Self {
+        Self {
+            roads: tiles
+                .iter()
+                .enumerate()
+                .flat_map(|(y, row)| row.iter().enumerate().map(move |(x, _)| (y, x, row)))
+                .flat_map(|(x, y, row)| {
+                    let mut roads =
+                        vec![Road::new((x, y), (x + 1, y)), Road::new((x, y), (x, y + 1))];
+                    if y % 2 == 0 && x > 0 {
+                        roads.push(Road::new((x, y), (x - 1, y + 1)));
+                    } else if y % 2 == 1 && x < row.len() - 1 {
+                        roads.push(Road::new((x, y), (x + 1, y + 1)));
+                    }
+                    roads.into_iter()
+                })
+                .collect(),
+            tiles,
+            businesses: vec![Business::new(); num_businesses as usize],
+        }
+    }
     pub fn get_resource_stock(&self, business_id: usize) -> BTreeMap<Resource, QuantityInfo> {
         let mut resource_stock: BTreeMap<Resource, QuantityInfo> = BTreeMap::new();
         for ScaledValidRecipe {
