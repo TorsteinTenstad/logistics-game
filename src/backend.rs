@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 #[derive(PartialEq, Eq, Hash, PartialOrd, Ord, Clone)]
-pub enum Material {
+pub enum Resource {
     Money,
     Energy,
     Sand,
@@ -19,7 +19,7 @@ pub enum Material {
     Plastic,
 }
 
-impl Material {
+impl Resource {
     pub fn get_texture_id(&self) -> String {
         match self {
             Self::Money => "money",
@@ -43,13 +43,13 @@ impl Material {
 }
 
 pub struct Recipe {
-    pub materials: Vec<(Material, i32)>,
+    pub resources: Vec<(Resource, i32)>,
 }
 
 #[derive(PartialEq, Eq, Hash)]
 pub enum ValidRecipe {
-    MaterialImport(Material),
-    MaterialExport(Material),
+    ResourceImport(Resource),
+    ResourceExport(Resource),
     ComputerAssembly,
     PlankProduction,
     FurnitureProduction,
@@ -68,76 +68,76 @@ pub enum ValidRecipe {
 impl ValidRecipe {
     pub fn get_recipe(&self) -> Recipe {
         Recipe {
-            materials: match self {
-                Self::MaterialImport(material) => {
-                    let (quantity, price) = match material {
-                        Material::Money => (1, 1),
-                        Material::Energy => (1, 2),
-                        Material::Sand => (2, 1),
-                        Material::Ore => (1, 4),
-                        Material::Gold => (1, 8),
-                        Material::Chip => (1, 1),
-                        Material::Wire => (1, 4),
-                        Material::Computer => (1, 8),
-                        Material::Log => (1, 2),
-                        Material::Plank => (1, 1),
-                        Material::Furniture => (1, 8),
-                        Material::RawOil => (1, 1),
-                        Material::Oil => (1, 2),
-                        Material::Glass => (1, 1),
-                        Material::Plastic => (1, 1),
+            resources: match self {
+                Self::ResourceImport(resource) => {
+                    let (quantity, price) = match resource {
+                        Resource::Money => (1, 1),
+                        Resource::Energy => (1, 2),
+                        Resource::Sand => (2, 1),
+                        Resource::Ore => (1, 4),
+                        Resource::Gold => (1, 8),
+                        Resource::Chip => (1, 1),
+                        Resource::Wire => (1, 4),
+                        Resource::Computer => (1, 8),
+                        Resource::Log => (1, 2),
+                        Resource::Plank => (1, 1),
+                        Resource::Furniture => (1, 8),
+                        Resource::RawOil => (1, 1),
+                        Resource::Oil => (1, 2),
+                        Resource::Glass => (1, 1),
+                        Resource::Plastic => (1, 1),
                     };
-                    vec![(Material::Money, -price), (material.clone(), quantity)]
+                    vec![(Resource::Money, -price), (resource.clone(), quantity)]
                 }
-                Self::MaterialExport(material) => {
-                    let (quantity, price) = match material {
-                        Material::Money => (1, 1),
-                        Material::Energy => (1, 2),
-                        Material::Sand => (2, 1),
-                        Material::Ore => (1, 4),
-                        Material::Gold => (1, 8),
-                        Material::Chip => (1, 1),
-                        Material::Wire => (1, 4),
-                        Material::Computer => (1, 8),
-                        Material::Log => (1, 2),
-                        Material::Plank => (1, 1),
-                        Material::Furniture => (1, 8),
-                        Material::RawOil => (1, 1),
-                        Material::Oil => (1, 2),
-                        Material::Glass => (1, 1),
-                        Material::Plastic => (1, 1),
+                Self::ResourceExport(resource) => {
+                    let (quantity, price) = match resource {
+                        Resource::Money => (1, 1),
+                        Resource::Energy => (1, 2),
+                        Resource::Sand => (2, 1),
+                        Resource::Ore => (1, 4),
+                        Resource::Gold => (1, 8),
+                        Resource::Chip => (1, 1),
+                        Resource::Wire => (1, 4),
+                        Resource::Computer => (1, 8),
+                        Resource::Log => (1, 2),
+                        Resource::Plank => (1, 1),
+                        Resource::Furniture => (1, 8),
+                        Resource::RawOil => (1, 1),
+                        Resource::Oil => (1, 2),
+                        Resource::Glass => (1, 1),
+                        Resource::Plastic => (1, 1),
                     };
-                    vec![(material.clone(), -quantity), (Material::Money, price)]
+                    vec![(resource.clone(), -quantity), (Resource::Money, price)]
                 }
-                Self::GlassProduction => vec![(Material::Sand, -1), (Material::Glass, 1)],
+                Self::GlassProduction => vec![(Resource::Sand, -1), (Resource::Glass, 1)],
                 Self::OilDrilling => vec![
-                    (Material::Money, -1),
-                    (Material::Energy, -1),
-                    (Material::RawOil, 4),
+                    (Resource::Money, -1),
+                    (Resource::Energy, -1),
+                    (Resource::RawOil, 4),
                 ],
-                Self::OilRefining => vec![(Material::RawOil, -1), (Material::Oil, 2)],
-                Self::OilBurning => vec![(Material::Oil, -1), (Material::Energy, 2)],
+                Self::OilRefining => vec![(Resource::RawOil, -1), (Resource::Oil, 2)],
+                Self::OilBurning => vec![(Resource::Oil, -1), (Resource::Energy, 2)],
                 Self::ComputerAssembly => vec![
-                    (Material::Chip, -1),
-                    (Material::Wire, -1),
-                    (Material::Computer, 1),
+                    (Resource::Chip, -1),
+                    (Resource::Wire, -1),
+                    (Resource::Computer, 1),
                 ],
-                Self::PlankProduction => vec![(Material::Log, -1), (Material::Plank, 4)],
-                Self::FurnitureProduction => vec![(Material::Plank, -4), (Material::Furniture, 1)],
-                Self::OreMining => vec![(Material::Energy, -1), (Material::Ore, 1)],
+                Self::PlankProduction => vec![(Resource::Log, -1), (Resource::Plank, 4)],
+                Self::FurnitureProduction => vec![(Resource::Plank, -4), (Resource::Furniture, 1)],
+                Self::OreMining => vec![(Resource::Energy, -1), (Resource::Ore, 1)],
                 Self::MetalRefining => vec![
-                    (Material::Ore, -2),
-                    (Material::Wire, 1),
-                    (Material::Gold, 1),
+                    (Resource::Ore, -2),
+                    (Resource::Wire, 1),
+                    (Resource::Gold, 1),
                 ],
-                Self::SandCollecting => vec![(Material::Energy, -1), (Material::Sand, 2)],
-                Self::Forestation => vec![(Material::Energy, -1), (Material::Log, 1)],
+                Self::SandCollecting => vec![(Resource::Energy, -1), (Resource::Sand, 2)],
+                Self::Forestation => vec![(Resource::Energy, -1), (Resource::Log, 1)],
                 Self::ChipProduction => vec![
-                    (Material::Energy, -1),
-                    (Material::Sand, -1),
-                    (Material::Chip, 1),
+                    (Resource::Energy, -1),
+                    (Resource::Sand, -1),
+                    (Resource::Chip, 1),
                 ],
-                Self::PlasticProduction => vec![(Material::Oil, -1), (Material::Plastic, 4)],
+                Self::PlasticProduction => vec![(Resource::Oil, -1), (Resource::Plastic, 4)],
             },
         }
     }
@@ -149,9 +149,9 @@ pub struct ScaledValidRecipe {
     pub max_scale: i32,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum BuildingType {
-    Market,
+    LocalMarket,
     EnergyMarket,
     Sawmill,
     FurnitureFactory,
@@ -166,36 +166,38 @@ pub enum BuildingType {
     PlasticFactory,
     OilEnergyPlant,
     TreeFarm,
+    SolarEnergyFarm,
+    WindEnergyFarm,
 }
 
 impl BuildingType {
     fn get_valid_recipes(&self) -> Vec<ValidRecipe> {
         match self {
-            Self::Market => {
+            Self::LocalMarket => {
                 vec![
-                    ValidRecipe::MaterialExport(Material::Glass),
-                    ValidRecipe::MaterialImport(Material::Wire),
-                    ValidRecipe::MaterialExport(Material::Wire),
-                    ValidRecipe::MaterialExport(Material::Chip),
-                    ValidRecipe::MaterialExport(Material::Gold),
-                    ValidRecipe::MaterialExport(Material::Ore),
-                    ValidRecipe::MaterialImport(Material::Log),
-                    ValidRecipe::MaterialExport(Material::Log),
-                    ValidRecipe::MaterialExport(Material::Plastic),
-                    ValidRecipe::MaterialExport(Material::Computer),
+                    ValidRecipe::ResourceExport(Resource::Glass),
+                    ValidRecipe::ResourceImport(Resource::Wire),
+                    ValidRecipe::ResourceExport(Resource::Wire),
+                    ValidRecipe::ResourceExport(Resource::Chip),
+                    ValidRecipe::ResourceExport(Resource::Gold),
+                    ValidRecipe::ResourceExport(Resource::Ore),
+                    ValidRecipe::ResourceImport(Resource::Log),
+                    ValidRecipe::ResourceExport(Resource::Log),
+                    ValidRecipe::ResourceExport(Resource::Plastic),
+                    ValidRecipe::ResourceExport(Resource::Computer),
                 ]
             }
             Self::EnergyMarket => {
                 vec![
-                    ValidRecipe::MaterialImport(Material::Energy),
-                    ValidRecipe::MaterialExport(Material::Energy),
+                    ValidRecipe::ResourceImport(Resource::Energy),
+                    ValidRecipe::ResourceExport(Resource::Energy),
                 ]
             }
             Self::WoodWorkingMarket => {
                 vec![
-                    ValidRecipe::MaterialImport(Material::Plank),
-                    ValidRecipe::MaterialExport(Material::Plank),
-                    ValidRecipe::MaterialExport(Material::Furniture),
+                    ValidRecipe::ResourceImport(Resource::Plank),
+                    ValidRecipe::ResourceExport(Resource::Plank),
+                    ValidRecipe::ResourceExport(Resource::Furniture),
                 ]
             }
             Self::ComputerFactory => {
@@ -212,6 +214,33 @@ impl BuildingType {
             Self::OilRefinery => vec![ValidRecipe::OilRefining],
             Self::OilEnergyPlant => vec![ValidRecipe::OilBurning],
             Self::PlasticFactory => vec![ValidRecipe::PlasticProduction],
+            Self::SolarEnergyFarm => {
+                vec![ValidRecipe::ResourceExport(Resource::Energy)]
+            }
+            Self::WindEnergyFarm => {
+                vec![ValidRecipe::ResourceExport(Resource::Energy)]
+            }
+        }
+    }
+    pub fn get_construction_cost(&self) -> i32 {
+        match self {
+            BuildingType::LocalMarket => 20,
+            BuildingType::EnergyMarket => 20,
+            BuildingType::Sawmill => 80,
+            BuildingType::FurnitureFactory => 60,
+            BuildingType::WoodWorkingMarket => 20,
+            BuildingType::ComputerFactory => 150,
+            BuildingType::TreeFarm => 50,
+            BuildingType::SandPlant => 80,
+            BuildingType::Mine => 100,
+            BuildingType::MetalRefinery => 100,
+            BuildingType::GlassFactory => 50,
+            BuildingType::OilRig => 100,
+            BuildingType::OilRefinery => 100,
+            BuildingType::PlasticFactory => 100,
+            BuildingType::OilEnergyPlant => 100,
+            BuildingType::SolarEnergyFarm => 200,
+            BuildingType::WindEnergyFarm => 200,
         }
     }
 }
@@ -219,7 +248,6 @@ impl BuildingType {
 pub struct Building {
     pub building_type: BuildingType,
     pub production_scale: Vec<ScaledValidRecipe>,
-    pub construction_cost: i32,
 }
 
 impl Building {
@@ -235,23 +263,6 @@ impl Building {
                     max_scale: 5,
                 })
                 .collect(),
-            construction_cost: match building_type {
-                BuildingType::Market => 20,
-                BuildingType::EnergyMarket => 20,
-                BuildingType::Sawmill => 80,
-                BuildingType::FurnitureFactory => 60,
-                BuildingType::WoodWorkingMarket => 20,
-                BuildingType::ComputerFactory => 150,
-                BuildingType::TreeFarm => 50,
-                BuildingType::SandPlant => 80,
-                BuildingType::Mine => 100,
-                BuildingType::MetalRefinery => 100,
-                BuildingType::GlassFactory => 50,
-                BuildingType::OilRig => 100,
-                BuildingType::OilRefinery => 100,
-                BuildingType::PlasticFactory => 100,
-                BuildingType::OilEnergyPlant => 100,
-            },
         }
     }
 }
@@ -264,8 +275,39 @@ pub enum TerrainType {
     Hills,
     Mountain,
     Urban,
+    Industrial,
     WaterShallow,
     WaterDeep,
+}
+
+impl TerrainType {
+    pub fn supported_building_types(&self) -> Vec<BuildingType> {
+        match self {
+            Self::Grassland => vec![BuildingType::SolarEnergyFarm, BuildingType::WindEnergyFarm],
+            Self::Forrest => vec![BuildingType::TreeFarm],
+            Self::Desert => vec![
+                BuildingType::SolarEnergyFarm,
+                BuildingType::SandPlant,
+                BuildingType::OilRig,
+            ],
+            Self::Hills => vec![BuildingType::OilRig],
+            Self::Mountain => vec![],
+            Self::Urban => vec![BuildingType::LocalMarket],
+            Self::Industrial => vec![
+                BuildingType::EnergyMarket,
+                BuildingType::FurnitureFactory,
+                BuildingType::MetalRefinery,
+                BuildingType::GlassFactory,
+                BuildingType::OilRefinery,
+                BuildingType::Sawmill,
+                BuildingType::PlasticFactory,
+                BuildingType::OilEnergyPlant,
+                BuildingType::WoodWorkingMarket,
+            ],
+            Self::WaterShallow => vec![],
+            Self::WaterDeep => vec![],
+        }
+    }
 }
 
 pub struct Tile {
@@ -282,17 +324,20 @@ impl Tile {
             building: None,
         }
     }
+    pub fn get_acquisition_cost(&self) -> i32 {
+        100
+    }
 }
 
 #[derive(Default)]
 pub struct Business {
-    pub resources: BTreeMap<Material, i32>,
+    pub resources: BTreeMap<Resource, i32>,
 }
 
 impl Business {
     pub fn new() -> Self {
         Self {
-            resources: BTreeMap::from([(Material::Money, 250)]),
+            resources: BTreeMap::from([(Resource::Money, 250)]),
         }
     }
 }
@@ -318,8 +363,8 @@ pub struct GameData {
 }
 
 impl GameData {
-    pub fn get_resource_stock(&self, business_id: usize) -> BTreeMap<Material, QuantityInfo> {
-        let mut resource_stock: BTreeMap<Material, QuantityInfo> = BTreeMap::new();
+    pub fn get_resource_stock(&self, business_id: usize) -> BTreeMap<Resource, QuantityInfo> {
+        let mut resource_stock: BTreeMap<Resource, QuantityInfo> = BTreeMap::new();
         for ScaledValidRecipe {
             valid_recipe,
             scale,
@@ -336,7 +381,7 @@ impl GameData {
             .flat_map(|building| building.production_scale.iter())
             .filter(|s| (s.scale != 0))
         {
-            for (material, quantity) in valid_recipe.get_recipe().materials {
+            for (resource, quantity) in valid_recipe.get_recipe().resources {
                 let scaled_quantity = quantity * scale.clone() as i32;
                 let gross_in = if scaled_quantity > 0 {
                     scaled_quantity
@@ -348,19 +393,19 @@ impl GameData {
                 } else {
                     0
                 };
-                if let Some(quantity_info) = resource_stock.get_mut(&material) {
+                if let Some(quantity_info) = resource_stock.get_mut(&resource) {
                     quantity_info.gross_in += gross_in;
                     quantity_info.gross_out += gross_out;
                 } else {
                     resource_stock.insert(
-                        material.clone(),
+                        resource.clone(),
                         QuantityInfo {
                             quantity: self
                                 .businesses
                                 .get(business_id)
                                 .unwrap()
                                 .resources
-                                .get(&material)
+                                .get(&resource)
                                 .unwrap_or(&0)
                                 .clone(),
                             gross_in: gross_in,
@@ -370,12 +415,12 @@ impl GameData {
                 }
             }
         }
-        for (material, quantity) in self.businesses.get(business_id).unwrap().resources.iter() {
-            if resource_stock.contains_key(material) {
+        for (resource, quantity) in self.businesses.get(business_id).unwrap().resources.iter() {
+            if resource_stock.contains_key(resource) {
                 continue;
             }
             resource_stock.insert(
-                material.clone(),
+                resource.clone(),
                 QuantityInfo {
                     quantity: quantity.clone(),
                     gross_in: 0,
@@ -388,12 +433,12 @@ impl GameData {
     pub fn update_business_resources(&mut self, business_id: usize) {
         let resource_stock = self.get_resource_stock(business_id);
         let business = self.businesses.get_mut(business_id).unwrap();
-        for (material, quantity_info) in resource_stock {
+        for (resource, quantity_info) in resource_stock {
             let delta = quantity_info.gross_in - quantity_info.gross_out;
-            if let Some(quantity) = business.resources.get_mut(&material) {
+            if let Some(quantity) = business.resources.get_mut(&resource) {
                 *quantity += delta;
             } else {
-                business.resources.insert(material, delta);
+                business.resources.insert(resource, delta);
             }
         }
     }

@@ -102,9 +102,9 @@ pub fn draw_recipes_panel(
     {
         let mut texture_ids: Vec<(String, i32)> = vec![("right_arrow".to_string(), 1)];
 
-        for (material, quantity) in valid_recipe.get_recipe().materials.iter() {
+        for (resource, quantity) in valid_recipe.get_recipe().resources.iter() {
             let index = if *quantity > 0 { texture_ids.len() } else { 0 };
-            texture_ids.insert(index, (material.get_texture_id(), quantity.abs()));
+            texture_ids.insert(index, (resource.get_texture_id(), quantity.abs()));
         }
 
         let click_up = editable && ButtonState::Pressed == draw_button(x_, y_, 50.0, 25.0, BLACK).0;
@@ -119,11 +119,11 @@ pub fn draw_recipes_panel(
         let can_increment = requested_increment != 0
             && valid_recipe
                 .get_recipe()
-                .materials
+                .resources
                 .iter()
-                .all(|(material, quantity)| {
+                .all(|(resource, quantity)| {
                     requested_increment * quantity > 0
-                        || match resource_stock.get(material) {
+                        || match resource_stock.get(resource) {
                             Some(quantity_info) => {
                                 quantity_info.quantity
                                     + requested_increment * quantity

@@ -1,6 +1,10 @@
+use std::collections::{BTreeMap, HashMap};
+
 use macroquad::prelude::*;
 mod backend;
-use backend::{Business, GameData, TerrainType, Tile};
+use backend::{Business, GameData, QuantityInfo, Resource, ScaledValidRecipe, TerrainType, Tile};
+
+use crate::backend::Building;
 
 impl TerrainType {
     fn get_color(&self) -> Color {
@@ -13,6 +17,7 @@ impl TerrainType {
                     Self::Hills => "AD7135",
                     Self::Mountain => "5F4632",
                     Self::Urban => "7D847C",
+                    Self::Industrial => "45818E",
                     Self::WaterShallow => "76A5AF",
                     Self::WaterDeep => "45818E",
                 },
@@ -26,7 +31,9 @@ impl TerrainType {
 const HEX_RADIUS: f32 = 50.0;
 const COS_30: f32 = 0.86602540378;
 const ROAD_W: f32 = 2.0 * (1.0 - COS_30) * HEX_RADIUS;
+const ICON_SIZE: f32 = 40.0;
 pub const MARGIN: f32 = 10.0;
+pub const TEXTURE_SIZE: f32 = 60.0;
 
 fn get_player_color(player_id: usize) -> Color {
     match player_id {
@@ -42,10 +49,109 @@ pub fn draw_button(x: f32, y: f32, w: f32, h: f32, color: Color) -> bool {
     let local_mouse_pos = Vec2::from_array(mouse_position().into()) - Vec2::new(x, y);
     local_mouse_pos.cmpgt(Vec2::ZERO).all() && local_mouse_pos.cmplt(Vec2::new(w, h)).all()
 }
+pub fn draw_recipes_panel(
+    x: f32,
+    y: f32,
+    building: &mut Building,
+    resource_stock: &BTreeMap<Resource, QuantityInfo>,
+    textures: &HashMap<String, Texture2D>,
+    editable: bool,
+) -> Vec2 {
+    let mut x_ = x + MARGIN;
+    let mut y_ = y;
+
+    let w = 5 as f32 * (TEXTURE_SIZE + MARGIN) + 2.0 * MARGIN + 50.0;
+    let h = (TEXTURE_SIZE + MARGIN) * building.production_scale.len() as f32 + MARGIN;
+    y_ += MARGIN;
+    for ScaledValidRecipe {
+        valid_recipe,
+        scale,
+        max_scale,
+    } in building.production_scale.iter_mut()
+    {
+        let mut texture_ids: Vec<(String, i32)> = vec![("right_arrow".to_string(), 1)];
+
+        for (resource, quantity) in valid_recipe.get_recipe().resources.iter() {
+            let index = if *quantity > 0 { texture_ids.len() } else { 0 };
+            texture_ids.insert(index, (resource.get_texture_id(), quantity.abs()));
+        }
+        let click = is_mouse_button_pressed(MouseButton::Left);
+        let click_up = editable && draw_button(x_, y_, 50.0, 15.0, BLACK);
+        let click_down =
+            editable && draw_button(x_, y_ + TEXTURE_SIZE - MARGIN - 15.0, 50.0, 15.0, BLACK);
+        let requested_increment = match (
+            click,
+            click_up,
+            click_down,
+            *scale == 0,
+            *scale == *max_scale,
+        ) {
+            (true, true, false, _, false) => 1,
+            (true, false, true, false, _) => -1,
+            _ => 0,
+        };
+        let can_increment = requested_increment != 0
+            && valid_recipe
+                .get_recipe()
+                .resources
+                .iter()
+                .all(|(resource, quantity)| {
+                    requested_increment * quantity > 0
+                        || match resource_stock.get(resource) {
+                            Some(quantity_info) => {
+                                quantity_info.quantity
+                                    + requested_increment * quantity
+                                    + quantity_info.gross_in
+                                    - quantity_info.gross_out
+                                    >= 0
+                            }
+                            None => requested_increment * *quantity >= 0,
+                        }
+                });
+        if can_increment {
+            *scale += requested_increment;
+        }
+        draw_text(
+            format!("{}/{}", scale, max_scale).as_str(),
+            x_,
+            y_ + TEXTURE_SIZE / 2.0,
+            32.0,
+            WHITE,
+        );
+        x_ += 50.0 + MARGIN;
+
+        for (texture_id, quantity) in texture_ids {
+            let texture = textures.get(&texture_id).unwrap();
+            draw_texture_ex(
+                &texture,
+                x_,
+                y_,
+                WHITE,
+                DrawTextureParams {
+                    dest_size: Some(Vec2::splat(TEXTURE_SIZE)),
+                    ..Default::default()
+                },
+            );
+            if quantity > 1 {
+                draw_text(
+                    format!("{}", quantity).as_str(),
+                    x_,
+                    y_ + TEXTURE_SIZE,
+                    24.0,
+                    WHITE,
+                );
+            }
+            x_ += TEXTURE_SIZE + MARGIN;
+        }
+        x_ = x + MARGIN;
+        y_ += TEXTURE_SIZE + MARGIN;
+    }
+    Vec2::new(w, h)
+}
 
 fn hex_idx_to_pos(x: i32, y: i32) -> Vec2 {
     Vec2::new(
-        500.0 + 2.0 * HEX_RADIUS * x as f32 + HEX_RADIUS * (y % 2) as f32,
+        650.0 + 2.0 * HEX_RADIUS * x as f32 + HEX_RADIUS * (y % 2) as f32,
         100.0 + f32::sqrt(3.0) * HEX_RADIUS * y as f32,
     )
 }
@@ -122,24 +228,50 @@ fn draw_road(x: i32, y: i32, i: i32) -> bool {
 #[macroquad::main("logistics-game")]
 async fn main() {
     request_new_screen_size(1920.0, 1080.0);
+    let mut textures: HashMap<String, Texture2D> = HashMap::new();
+    for texture_id in vec![
+        "chip",
+        "gold",
+        "wire",
+        "computer",
+        "logs",
+        "planks",
+        "chair",
+        "right_arrow",
+        "money",
+        "rocks",
+        "sand",
+        "energy",
+        "raw_oil",
+        "oil",
+        "glass",
+        "plastic",
+    ] {
+        textures.insert(
+            texture_id.to_string(),
+            load_texture(format!("assets/textures/{}.png", texture_id).as_str())
+                .await
+                .unwrap(),
+        );
+    }
 
     #[rustfmt::skip]
     let mut game_data=GameData{tiles: [
-        [TerrainType::Desert, TerrainType::WaterShallow, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills],
-        [TerrainType::Desert, TerrainType::WaterShallow, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills],
-        [TerrainType::Desert, TerrainType::WaterShallow, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills],
-        [TerrainType::Desert, TerrainType::WaterShallow, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills],
-        [TerrainType::Desert, TerrainType::WaterShallow, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills],
-        [TerrainType::Forrest, TerrainType::Forrest, TerrainType::Forrest, TerrainType::Urban, TerrainType::Urban, TerrainType::WaterShallow, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep],
-        [TerrainType::Forrest, TerrainType::Forrest, TerrainType::Forrest, TerrainType::Urban, TerrainType::Urban, TerrainType::WaterShallow, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep],
-        [TerrainType::Forrest, TerrainType::Forrest, TerrainType::Forrest, TerrainType::Urban, TerrainType::Urban, TerrainType::WaterShallow, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep],
-        [TerrainType::Forrest, TerrainType::Forrest, TerrainType::Forrest, TerrainType::Urban, TerrainType::Urban, TerrainType::WaterShallow, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep],
-        [TerrainType::Forrest, TerrainType::Forrest, TerrainType::Forrest, TerrainType::Urban, TerrainType::Urban, TerrainType::WaterShallow, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep],
-        [TerrainType::Forrest, TerrainType::Forrest, TerrainType::Forrest, TerrainType::Urban, TerrainType::Urban, TerrainType::WaterShallow, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep],
-    ].iter().map(|row| row.iter().map(|terrain_type| Tile::new(&terrain_type)).collect::<Vec<Tile>>()).collect::<Vec<Vec<Tile>>>(), businesses: vec![Business::new()]};
+        [TerrainType::Desert, TerrainType::WaterShallow, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills],
+        [TerrainType::Desert, TerrainType::WaterShallow, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills],
+        [TerrainType::Desert, TerrainType::WaterShallow, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills],
+        [TerrainType::Desert, TerrainType::WaterShallow, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills],
+        [TerrainType::Desert, TerrainType::WaterShallow, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Mountain, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills, TerrainType::Hills],
+        [TerrainType::Forrest, TerrainType::Forrest, TerrainType::Forrest, TerrainType::Urban, TerrainType::Urban, TerrainType::Industrial, TerrainType::Industrial, TerrainType::Grassland, TerrainType::Grassland, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep],
+        [TerrainType::Forrest, TerrainType::Forrest, TerrainType::Forrest, TerrainType::Urban, TerrainType::Urban, TerrainType::Industrial, TerrainType::Industrial, TerrainType::Grassland, TerrainType::Grassland, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep],
+        [TerrainType::Forrest, TerrainType::Forrest, TerrainType::Forrest, TerrainType::Urban, TerrainType::Urban, TerrainType::Industrial, TerrainType::Industrial, TerrainType::Grassland, TerrainType::Grassland, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep],
+        [TerrainType::Forrest, TerrainType::Forrest, TerrainType::Forrest, TerrainType::Urban, TerrainType::Urban, TerrainType::Industrial, TerrainType::Industrial, TerrainType::Grassland, TerrainType::Grassland, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep],
+        [TerrainType::Forrest, TerrainType::Forrest, TerrainType::Forrest, TerrainType::Urban, TerrainType::Urban, TerrainType::Industrial, TerrainType::Industrial, TerrainType::Grassland, TerrainType::Grassland, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep],
+        [TerrainType::Forrest, TerrainType::Forrest, TerrainType::Forrest, TerrainType::Urban, TerrainType::Urban, TerrainType::Industrial, TerrainType::Industrial, TerrainType::Grassland, TerrainType::Grassland, TerrainType::WaterDeep, TerrainType::WaterDeep, TerrainType::WaterDeep],
+    ].iter().map(|row| row.iter().map(|terrain_type| Tile::new(&terrain_type)).collect::<Vec<Tile>>()).collect::<Vec<Vec<Tile>>>(), businesses: vec![Business::new(),Business::new()]};
 
     let mut selected_hex_opt: Option<(usize, usize)> = None;
-    let current_player_id = 0;
+    let mut current_player_id = 0;
     loop {
         clear_background(BLACK);
 
@@ -179,9 +311,54 @@ async fn main() {
                 }
             }
         }
+
+        let x_ = MARGIN;
+        let mut y_ = MARGIN;
+
+        let next_turn_hovered = draw_button(x_, y_, 150.0, 30.0, RED);
+        if next_turn_hovered && click {
+            current_player_id += 1;
+            if current_player_id == game_data.businesses.len() {
+                current_player_id = 0;
+            }
+        }
+        draw_text("End turn", x_ + MARGIN, y_ + 25.0, 28.0, WHITE);
+        y_ += 50.0;
+        draw_rectangle(x_, y_, 100.0, MARGIN, get_player_color(current_player_id));
+        y_ += MARGIN + MARGIN;
+        for (resource, quantity_info) in game_data.get_resource_stock(current_player_id) {
+            draw_texture_ex(
+                textures.get(&resource.get_texture_id()).unwrap(),
+                x_,
+                y_,
+                WHITE,
+                DrawTextureParams {
+                    dest_size: Some(Vec2::splat(ICON_SIZE)),
+                    ..Default::default()
+                },
+            );
+
+            draw_text(
+                format!(
+                    "{}({:+})",
+                    quantity_info.quantity,
+                    quantity_info.gross_in - quantity_info.gross_out,
+                )
+                .as_str(),
+                x_ + ICON_SIZE + MARGIN,
+                y_ + ICON_SIZE / 2.0,
+                24.0,
+                WHITE,
+            );
+            y_ += ICON_SIZE + MARGIN;
+        }
+
         if is_key_pressed(KeyCode::Escape) {
             selected_hex_opt = None;
         }
+
+        let resource_stock = game_data.get_resource_stock(current_player_id);
+        let PANEL_X = 200.0;
         if let Some((tile_x, tile_y)) = selected_hex_opt {
             let tile = game_data
                 .tiles
@@ -189,24 +366,67 @@ async fn main() {
                 .unwrap()
                 .get_mut(tile_y)
                 .unwrap();
-            draw_rectangle(0.0, 0.0, 400.0, screen_height(), GRAY);
+            draw_rectangle(PANEL_X, 0.0, 300.0, screen_height(), GRAY);
             draw_text(
                 format!("{:?}", tile.terrain_type).as_str(),
-                MARGIN,
+                PANEL_X + MARGIN,
                 MARGIN + 32.0,
                 32.0,
                 WHITE,
             );
-            let buy_hovered = draw_button(MARGIN, 100.0, 150.0, 40.0, RED);
-            draw_text(
-                format!("Buy, ${}", 100.0).as_str(),
-                2.0 * MARGIN,
-                120.0,
-                28.0,
-                WHITE,
-            );
-            if buy_hovered && click {
-                tile.owner_id = Some(current_player_id);
+            match tile.owner_id {
+                Some(id) if id == current_player_id => {}
+                Some(id) => {}
+                None => {
+                    let buy_hovered = draw_button(PANEL_X + MARGIN, 100.0, 150.0, 40.0, RED);
+                    draw_text(
+                        format!("Buy, ${}", tile.get_acquisition_cost()).as_str(),
+                        PANEL_X + 2.0 * MARGIN,
+                        120.0,
+                        28.0,
+                        WHITE,
+                    );
+                    if buy_hovered && click {
+                        tile.owner_id = Some(current_player_id);
+                        *game_data
+                            .businesses
+                            .get_mut(current_player_id)
+                            .unwrap()
+                            .resources
+                            .get_mut(&backend::Resource::Money)
+                            .unwrap() -= tile.get_acquisition_cost();
+                    }
+                }
+            }
+            let mut y_ = 200.0;
+            if let Some(building) = tile.building.as_mut() {
+                draw_recipes_panel(PANEL_X, y_, building, &resource_stock, &textures, true);
+            } else {
+                draw_text("Supported buildings:", PANEL_X + MARGIN, y_, 32.0, WHITE);
+                y_ += 40.0;
+                for building_type in tile.terrain_type.supported_building_types() {
+                    draw_text(
+                        format!("{:?}", building_type).as_str(),
+                        PANEL_X + MARGIN,
+                        y_,
+                        24.0,
+                        WHITE,
+                    );
+                    if tile.owner_id == Some(current_player_id) && tile.building.is_none() {
+                        let hover_build = draw_button(PANEL_X + 200.0, y_ - 20.0, 100.0, 30.0, RED);
+                        draw_text(
+                            format!("Buy, ${}", building_type.get_construction_cost()).as_str(),
+                            PANEL_X + 200.0 + MARGIN,
+                            y_,
+                            24.0,
+                            WHITE,
+                        );
+                        if hover_build && click {
+                            tile.building = Some(Building::new(building_type))
+                        }
+                    }
+                    y_ += 24.0;
+                }
             }
         }
         next_frame().await
